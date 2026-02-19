@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pingvinek-mars-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:latest
+    container_name: pingvinek-mars-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: pingvinek
+      MONGO_INITDB_ROOT_PASSWORD: "h,]>X2EB93X'K(4X}ST£3KVxAn<)OKuWvvA>;2.Wm1uhg)?&}"
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
