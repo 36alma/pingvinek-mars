@@ -1,0 +1,1 @@
+mongodb://pingvinek:h,]>X2EB93X'K(4X}ST£3KVxAn<)OKuWvvA>;2.Wm1uhg)?&}@localhost:27017/
