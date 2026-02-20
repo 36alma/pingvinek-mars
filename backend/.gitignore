@@ -1,0 +1,18 @@
+# === PYTHON ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+alembic.ini
+pyproject.toml
+pyrightconfig.json
+.vscode
+.cursor
+.antigravity
+.todo
+test/
+*.swp
