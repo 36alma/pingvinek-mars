@@ -119,23 +119,30 @@ export const useStore = create((set, get) => ({
             type,
             message,
         };
-        set({ logs: [...s.logs, entry] });
+        // Cap logs at 200 to prevent memory growth
+        const logs = s.logs.length >= 200
+            ? [...s.logs.slice(-199), entry]
+            : [...s.logs, entry];
+        set({ logs });
     },
 
     _addChartPoint: () => {
         const s = get();
-        set({
-            logHistory: [...s.logHistory, {
-                tick: s.tick,
-                h: +(s.tick * 0.5).toFixed(1),
-                battery: Math.round(s.battery),
-                distance: s.totalDistance,
-                B: s.inventory.B,
-                Y: s.inventory.Y,
-                G: s.inventory.G,
-                total: s.inventory.B + s.inventory.Y + s.inventory.G,
-            }],
-        });
+        const point = {
+            tick: s.tick,
+            h: +(s.tick * 0.5).toFixed(1),
+            battery: Math.round(s.battery),
+            distance: s.totalDistance,
+            B: s.inventory.B,
+            Y: s.inventory.Y,
+            G: s.inventory.G,
+            total: s.inventory.B + s.inventory.Y + s.inventory.G,
+        };
+        // Cap chart history at 300 points
+        const logHistory = s.logHistory.length >= 300
+            ? [...s.logHistory.slice(-299), point]
+            : [...s.logHistory, point];
+        set({ logHistory });
     },
 
     // ── Simulation Tick ──

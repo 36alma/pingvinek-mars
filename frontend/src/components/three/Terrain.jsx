@@ -44,34 +44,58 @@ function Obstacles({ positions }) {
     );
 }
 
-// Individual mineral crystal
-function Mineral({ x, y, type }) {
-    const ref = useRef();
-    const color = type === CELL.BLUE ? '#00cfff' : type === CELL.YELLOW ? '#ffcc00' : '#00ff66';
+// Instanced minerals for performance
+function MineralInstances({ minerals }) {
+    const blueRef = useRef();
+    const yellowRef = useRef();
+    const greenRef = useRef();
+    const dummy = useMemo(() => new THREE.Object3D(), []);
+
+    const grouped = useMemo(() => {
+        const b = [], y = [], g = [];
+        for (const m of minerals) {
+            if (m.type === CELL.BLUE) b.push(m);
+            else if (m.type === CELL.YELLOW) y.push(m);
+            else g.push(m);
+        }
+        return { b, y, g };
+    }, [minerals]);
 
     useFrame((state) => {
-        if (ref.current) {
-            ref.current.rotation.y = state.clock.elapsedTime * 1.2;
-            ref.current.position.y = 0.28 + Math.sin(state.clock.elapsedTime * 2 + x * 0.5 + y * 0.3) * 0.06;
-        }
+        const t = state.clock.elapsedTime;
+        [[blueRef, grouped.b], [yellowRef, grouped.y], [greenRef, grouped.g]].forEach(([ref, group]) => {
+            if (!ref.current || group.length === 0) return;
+            group.forEach((m, i) => {
+                dummy.position.set(m.x * S, 0.28 + Math.sin(t * 2 + m.x * 0.5 + m.y * 0.3) * 0.06, m.y * S);
+                dummy.rotation.y = t * 1.2;
+                dummy.updateMatrix();
+                ref.current.setMatrixAt(i, dummy.matrix);
+            });
+            ref.current.instanceMatrix.needsUpdate = true;
+        });
     });
 
     return (
-        <group position={[x * S, 0, y * S]}>
-            <mesh ref={ref} position={[0, 0.28, 0]}>
-                <octahedronGeometry args={[0.18, 0]} />
-                <meshStandardMaterial
-                    color={color}
-                    emissive={color}
-                    emissiveIntensity={0.6}
-                    transparent
-                    opacity={0.9}
-                    roughness={0.15}
-                    metalness={0.4}
-                />
-            </mesh>
-            <pointLight position={[0, 0.35, 0]} color={color} intensity={0.6} distance={2.5} />
-        </group>
+        <>
+            {grouped.b.length > 0 && (
+                <instancedMesh ref={blueRef} args={[null, null, grouped.b.length]}>
+                    <octahedronGeometry args={[0.18, 0]} />
+                    <meshStandardMaterial color="#00cfff" emissive="#00cfff" emissiveIntensity={0.6} transparent opacity={0.9} roughness={0.15} metalness={0.4} />
+                </instancedMesh>
+            )}
+            {grouped.y.length > 0 && (
+                <instancedMesh ref={yellowRef} args={[null, null, grouped.y.length]}>
+                    <octahedronGeometry args={[0.18, 0]} />
+                    <meshStandardMaterial color="#ffcc00" emissive="#ffcc00" emissiveIntensity={0.6} transparent opacity={0.9} roughness={0.15} metalness={0.4} />
+                </instancedMesh>
+            )}
+            {grouped.g.length > 0 && (
+                <instancedMesh ref={greenRef} args={[null, null, grouped.g.length]}>
+                    <octahedronGeometry args={[0.18, 0]} />
+                    <meshStandardMaterial color="#00ff66" emissive="#00ff66" emissiveIntensity={0.6} transparent opacity={0.9} roughness={0.15} metalness={0.4} />
+                </instancedMesh>
+            )}
+        </>
     );
 }
 
@@ -138,10 +162,8 @@ export default function Terrain() {
             {/* Obstacles (instanced) */}
             <Obstacles positions={obstacles} />
 
-            {/* Minerals */}
-            {visibleMinerals.map((m) => (
-                <Mineral key={`${m.x}-${m.y}`} x={m.x} y={m.y} type={m.type} />
-            ))}
+            {/* Minerals (instanced) */}
+            <MineralInstances minerals={visibleMinerals} />
 
             {/* Start marker */}
             <StartMarker x={startX} y={startY} />

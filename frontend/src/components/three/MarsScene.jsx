@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
 import { useStore } from '../../store/store';
@@ -13,9 +13,14 @@ import { MAP_SIZE } from '../../simulation/mapData';
 function Lighting() {
     const ambRef = useRef();
     const sunRef = useRef();
-    const tick = useStore((s) => s.tick);
+    const tickRef = useRef(0);
+
+    useEffect(() => {
+        return useStore.subscribe((s) => { tickRef.current = s.tick; });
+    }, []);
 
     useFrame(() => {
+        const tick = tickRef.current;
         const cyclePos = tick % 48;
         const isDay = cyclePos < 32;
 
@@ -63,14 +68,14 @@ function Lighting() {
 
 /**
  * Mars atmosphere: stars + fog
+ * Only re-renders when day/night phase changes (every 32 ticks)
  */
 function Atmosphere() {
-    const tick = useStore((s) => s.tick);
-    const isDay = (tick % 48) < 32;
+    const isDay = useStore((s) => (s.tick % 48) < 32);
 
     return (
         <>
-            <Stars radius={120} depth={60} count={4000} factor={5} saturation={0} fade speed={0.5} />
+            <Stars radius={120} depth={60} count={2000} factor={5} saturation={0} fade speed={0.3} />
             <fog attach="fog" args={[isDay ? '#c47040' : '#0a0512', 35, 90]} />
         </>
     );
@@ -83,9 +88,11 @@ export default function MarsScene() {
         <div style={{ width: '100%', height: '100%' }}>
             <Canvas
                 camera={{ position: [center, 40, center + 35], fov: 45, near: 0.1, far: 250 }}
-                shadows
-                gl={{ antialias: true, toneMapping: 3 }} // ACESFilmic
+                shadows={{ type: 'PCFSoftShadowMap' }}
+                gl={{ antialias: false, toneMapping: 3, powerPreference: 'high-performance' }}
                 style={{ background: '#120808' }}
+                frameloop="always"
+                performance={{ min: 0.5 }}
             >
                 <Lighting />
                 <Atmosphere />
