@@ -1,10 +1,14 @@
 from fastapi import APIRouter
 from schemas.IN.rover import RoverMoveRequest
-from schemas.OUT.rover import RoverMoveResponse
-from services.rover import calculate_straight_line_movement
 
 app = APIRouter(prefix="/rover", tags=["Rover"])
 
-@app.post("/move", response_model=RoverMoveResponse)
-def move_rover(request: RoverMoveRequest):
-    return calculate_straight_line_movement(request)
+
+class Rover_Router():
+    def __init__(self):
+        self._register_api_endpoint()
+
+    def _register_api_endpoint(self):
+        @app.post("/move")
+        def move_rover(self, request: RoverMoveRequest):
+            return request
