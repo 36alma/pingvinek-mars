@@ -730,8 +730,14 @@
 
 .rp-stat {
     display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.rp-stat-top {
+    display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: space-between;
 }
 
 .rp-label {
@@ -739,9 +745,6 @@
     letter-spacing: 1px;
     color: var(--tx-3);
     text-transform: uppercase;
-    white-space: nowrap;
-    width: 80px;
-    flex-shrink: 0;
 }
 
 .rp-bat-bar {
@@ -760,8 +763,6 @@
 
 .rp-val {
     font: 700 12px/1 var(--font-d);
-    min-width: 32px;
-    text-align: right;
 }
 
 /* 4-column mini stats */

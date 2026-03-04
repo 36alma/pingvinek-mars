@@ -170,11 +170,13 @@ export default function RoverPreview() {
             <div className="rp-stats">
                 <div className="rp-row">
                     <div className="rp-stat">
-                        <span className="rp-label">Akkumulátor</span>
+                        <div className="rp-stat-top">
+                            <span className="rp-label">Akkumulátor</span>
+                            <span className="rp-val" style={{ color: batColor }}>{Math.round(battery)}%</span>
+                        </div>
                         <div className="rp-bat-bar">
                             <div className="rp-bat-fill" style={{ width: `${battery}%`, background: batColor, boxShadow: `0 0 6px ${batColor}80` }} />
                         </div>
-                        <span className="rp-val" style={{ color: batColor }}>{Math.round(battery)}%</span>
                     </div>
                 </div>
 
