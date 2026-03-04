@@ -64,12 +64,12 @@ export default function Rover() {
             {/* Body chassis */}
             <mesh castShadow>
                 <boxGeometry args={[0.55, 0.16, 0.75]} />
-                <meshStandardMaterial color="#e0e0e0" metalness={0.5} roughness={0.35} />
+                <meshStandardMaterial color="#e0e0e0" emissive="#666666" emissiveIntensity={0.3} metalness={0.5} roughness={0.35} />
             </mesh>
             {/* Body top */}
             <mesh position={[0, 0.1, -0.05]} castShadow>
                 <boxGeometry args={[0.42, 0.1, 0.5]} />
-                <meshStandardMaterial color="#d0d0d0" metalness={0.4} roughness={0.4} />
+                <meshStandardMaterial color="#d0d0d0" emissive="#555555" emissiveIntensity={0.3} metalness={0.4} roughness={0.4} />
             </mesh>
 
             {/* Camera mast */}
@@ -91,7 +91,7 @@ export default function Rover() {
             <group ref={panelRef} position={[0, 0.22, 0.1]}>
                 <mesh castShadow>
                     <boxGeometry args={[0.75, 0.015, 0.5]} />
-                    <meshStandardMaterial color="#1a237e" metalness={0.3} roughness={0.3} />
+                    <meshStandardMaterial color="#1a237e" emissive="#1a237e" emissiveIntensity={0.4} metalness={0.3} roughness={0.3} />
                 </mesh>
                 {/* Panel detail lines */}
                 {[-0.2, 0, 0.2].map((z, i) => (

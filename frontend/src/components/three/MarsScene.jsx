@@ -54,12 +54,12 @@ function Lighting() {
         } else {
             const nightPos = (cyclePos - 32) / 16;
             if (ambRef.current) {
-                ambRef.current.intensity = 0.7;
-                ambRef.current.color.setHex(0x6677bb);
+                ambRef.current.intensity = 1.4;
+                ambRef.current.color.setHex(0x8899cc);
             }
             if (sunRef.current) {
-                sunRef.current.intensity = 0.4;
-                sunRef.current.color.setHex(0x99aadd);
+                sunRef.current.intensity = 0.8;
+                sunRef.current.color.setHex(0xaabbee);
                 const angle = nightPos * Math.PI;
                 sunRef.current.position.set(
                     Math.cos(angle + Math.PI) * 40,
@@ -68,8 +68,8 @@ function Lighting() {
                 );
             }
             if (hemiRef.current) {
-                hemiRef.current.intensity = 0.3;
-                hemiRef.current.color.setHex(0x334477);
+                hemiRef.current.intensity = 0.5;
+                hemiRef.current.color.setHex(0x5566aa);
             }
         }
     });
@@ -93,7 +93,7 @@ function Atmosphere() {
     return (
         <>
             <Stars radius={120} depth={60} count={2000} factor={5} saturation={0} fade speed={0.3} />
-            <fog attach="fog" args={[isDay ? '#c47040' : '#0a0512', 35, 90]} />
+            <fog attach="fog" args={[isDay ? '#c47040' : '#1a1a3a', 35, 90]} />
         </>
     );
 }
@@ -144,7 +144,7 @@ export default function MarsScene() {
             <Canvas
                 camera={{ position: [startX, 40, startY + 35], fov: 45, near: 0.1, far: 250 }}
                 shadows={{ type: 'PCFSoftShadowMap' }}
-                gl={{ antialias: false, toneMapping: 3, powerPreference: 'high-performance' }}
+                gl={{ antialias: false, toneMapping: 1, toneMappingExposure: 1.2, powerPreference: 'high-performance' }}
                 style={{ background: '#120808' }}
                 frameloop="always"
                 performance={{ min: 0.5 }}
