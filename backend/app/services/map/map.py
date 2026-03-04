@@ -2,8 +2,15 @@ import csv
 import os
 from typing import Dict, Tuple
 from schemas.JSON.map import MapResponse
-
-
+from schemas.JSON.map_block import (
+    BaseMapBlock,
+    AirMapBlock,
+    WallMapBlock,
+    BlueOreMapBlock,
+    YellowOreMapBlock,
+    GreenOreMapBlock,
+    StartMapBlock
+    )
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data")
 CSV_PATH = os.path.join(DATA_DIR, "map.csv")
 
@@ -40,3 +47,25 @@ class MapService:
         """Térkép adatok lekérése JSON formátumban koordináta-kulcsokkal."""
         coord_map, rows, cols = self._read_csv()
         return MapResponse(map=coord_map, rows=rows, cols=cols)
+
+    def get_map_block_type(self, x: int, y: int) -> BaseMapBlock|None:
+        if x >= 0 and y >= 0 and x<= 49 and y<= 49:
+            map_type = self._read_csv()[0][f"{x},{y}"]
+        else:
+            print(f"Coordinates out of bounds: {x},{y}")
+            return None
+        if map_type == ".":
+            return AirMapBlock()
+        elif map_type == "#":
+            return WallMapBlock()
+        elif map_type == "B":
+            return BlueOreMapBlock()
+        elif map_type == "Y":
+            return YellowOreMapBlock()
+        elif map_type == "G":
+            return GreenOreMapBlock()
+        elif map_type == "S":
+            return StartMapBlock()
+        else:
+            print(f"Unknown map type: {map_type}")
+            return None
