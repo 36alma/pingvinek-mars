@@ -8,10 +8,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY app/ ./app/
+COPY app/ .
 
 # Expose the application port
 EXPOSE ${APP_PORT}
 
 # Run the application
-CMD ["python", "app/main.py"]
+CMD ["python", "main.py"]
