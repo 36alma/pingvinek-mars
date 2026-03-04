@@ -18,11 +18,14 @@ export default function App() {
             </header>
 
             <main className="layout">
+                <aside className="pane-dash pane-dash--left">
+                    <Dashboard side="left" />
+                </aside>
                 <section className="pane-3d">
                     <MarsScene />
                 </section>
-                <aside className="pane-dash">
-                    <Dashboard />
+                <aside className="pane-dash pane-dash--right">
+                    <Dashboard side="right" />
                 </aside>
             </main>
         </div>
