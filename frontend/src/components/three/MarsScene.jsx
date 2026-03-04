@@ -182,39 +182,63 @@ function Sun() {
  */
 function SpaceSkybox() {
     const center = MAP_SIZE / 2 - 0.5;
+    const groupRef = useRef();
 
-    // Generate nebula cloud positions deterministically
-    const clouds = useRef(() => {
-        const arr = [];
+    // Deterministic planet definitions
+    const planets = useRef(() => {
         const rng = (s) => { let x = Math.sin(s) * 43758.5453; return x - Math.floor(x); };
-        const colors = [0x1a0a2e, 0x0a1a2e, 0x2e0a0a, 0x0a2e1a, 0x1a1a3e];
-        for (let i = 0; i < 18; i++) {
-            arr.push({
-                x: center + (rng(i * 3.1) - 0.5) * 380,
-                y: 20 + rng(i * 7.3) * 120,
-                z: center + (rng(i * 5.7) - 0.5) * 380,
-                scale: 25 + rng(i * 2.9) * 60,
-                color: colors[i % colors.length],
-                opacity: 0.04 + rng(i * 4.1) * 0.08,
-            });
-        }
-        return arr;
+        const configs = [
+            { color: 0xc1440e, emissive: 0x6b1a00, name: "vörös" },    // Mars-like
+            { color: 0xe8c57a, emissive: 0x7a5a10, name: "homok" },     // Saturn-like
+            { color: 0x4a7fc1, emissive: 0x0a2a5a, name: "kék" },       // ice planet
+            { color: 0x8a5a8a, emissive: 0x3a1a3a, name: "lila" },      // gas giant
+            { color: 0xd4956a, emissive: 0x6a2a10, name: "narancs" },   // rocky
+            { color: 0x6aab8a, emissive: 0x1a4a2a, name: "zöld" },      // exotic
+        ];
+        return configs.map((cfg, i) => ({
+            x: center + (rng(i * 3.1 + 1) - 0.5) * 180,
+            y: 15 + rng(i * 7.3 + 2) * 25,
+            z: center + (rng(i * 5.7 + 3) - 0.5) * 180,
+            radius: 4 + rng(i * 2.9 + 4) * 10,
+            color: cfg.color,
+            emissive: cfg.emissive,
+        }));
     }).current();
 
+    // Slowly rotate the whole group
+    useFrame((state) => {
+        if (groupRef.current) {
+            groupRef.current.rotation.y = state.clock.elapsedTime * 0.008;
+        }
+    });
+
     return (
-        <group>
-            {/* Nebula dust clouds */}
-            {clouds.map((c, i) => (
-                <mesh key={i} position={[c.x, c.y, c.z]}>
-                    <sphereGeometry args={[c.scale, 7, 7]} />
-                    <meshBasicMaterial
-                        color={c.color}
-                        transparent
-                        opacity={c.opacity}
-                        side={THREE.BackSide}
-                        depthWrite={false}
-                    />
-                </mesh>
+        <group ref={groupRef}>
+            {planets.map((p, i) => (
+                <group key={i} position={[p.x, p.y, p.z]}>
+                    {/* Planet body */}
+                    <mesh>
+                        <sphereGeometry args={[p.radius, 32, 32]} />
+                        <meshStandardMaterial
+                            color={p.color}
+                            emissive={p.emissive}
+                            emissiveIntensity={0.3}
+                            roughness={0.8}
+                            metalness={0.1}
+                        />
+                    </mesh>
+                    {/* Subtle atmosphere glow */}
+                    <mesh>
+                        <sphereGeometry args={[p.radius * 1.08, 16, 16]} />
+                        <meshBasicMaterial
+                            color={p.color}
+                            transparent
+                            opacity={0.08}
+                            side={THREE.BackSide}
+                            depthWrite={false}
+                        />
+                    </mesh>
+                </group>
             ))}
         </group>
     );
