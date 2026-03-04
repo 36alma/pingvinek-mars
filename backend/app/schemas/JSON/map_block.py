@@ -6,6 +6,7 @@ class MapTypes(Enum):
     BLUE_ORE = "blue_ore"
     YELLOW_ORE = "yellow_ore"
     GREEN_ORE = "green_ore"
+    START = "start"
 
 class BaseMapBlock():
     def __init__(self):
@@ -30,3 +31,7 @@ class YellowOreMapBlock(BaseMapBlock):
 class GreenOreMapBlock(BaseMapBlock):
     def __init__(self):
         self.type = MapTypes.GREEN_ORE
+
+class StartMapBlock(BaseMapBlock):
+    def __init__(self):
+        self.type = MapTypes.START
