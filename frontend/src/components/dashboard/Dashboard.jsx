@@ -30,7 +30,6 @@ export default function Dashboard({ side }) {
                 <p>Telemetria & Napló</p>
             </div>
             <div className="dash-grid">
-                <StatsPanel />
                 <Charts />
                 <EventLog />
             </div>
