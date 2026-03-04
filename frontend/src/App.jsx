@@ -1,31 +1,30 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import './App.css'
+import MarsScene from './components/three/MarsScene';
+import Dashboard from './components/dashboard/Dashboard';
+import './App.css';
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+    return (
+        <div className="app">
+            <header className="topbar">
+                <div className="topbar-left">
+                    <span className="topbar-dot" />
+                    <h1 className="topbar-title">MARS ROVER</h1>
+                    <span className="topbar-tag">SZIMULÁCIÓ</span>
+                </div>
+                <div className="topbar-right">
+                    <span className="topbar-team">🐧 Pingvinek</span>
+                    <span className="topbar-ver">v2.0</span>
+                </div>
+            </header>
 
-  return (
-    <>
-      <div>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Pingvinek Mars</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the React logo to learn more
-      </p>
-    </>
-  )
+            <main className="layout">
+                <section className="pane-3d">
+                    <MarsScene />
+                </section>
+                <aside className="pane-dash">
+                    <Dashboard />
+                </aside>
+            </main>
+        </div>
+    );
 }
-
-export default App
