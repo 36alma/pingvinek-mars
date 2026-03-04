@@ -128,6 +128,12 @@ export const useStore = create((set, get) => ({
 
     _addChartPoint: () => {
         const s = get();
+        const cyclePos = s.tick % 48;
+        const isDay = cyclePos < 32;
+        const spd = s.speed;
+        // Approximate energy this tick
+        const consumed = s.isMining ? 2 : s.isMoving ? (2 * spd * spd) : 1;
+        const solar = isDay ? 10 : 0;
         const point = {
             tick: s.tick,
             h: +(s.tick * 0.5).toFixed(1),
@@ -137,6 +143,9 @@ export const useStore = create((set, get) => ({
             Y: s.inventory.Y,
             G: s.inventory.G,
             total: s.inventory.B + s.inventory.Y + s.inventory.G,
+            solar,
+            consumed,
+            isDay,
         };
         // Cap chart history at 300 points
         const logHistory = s.logHistory.length >= 300

@@ -829,3 +829,157 @@
 .rp-min-item.yellow { border-color: #ffcc0044; }
 .rp-min-item.green { border-color: #00ff6644; }
 .rp-min-item.total { border-color: #8888ff44; }
+
+/* ── ENERGY BALANCE WIDGET ── */
+.en-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.en-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 8px 4px;
+}
+
+.en-card.solar    { border-color: #ffcc0033; }
+.en-card.consumed { border-color: #ff444433; }
+.en-card.efficiency { border-color: #00cfff33; }
+.en-card.battery  { border-color: #39ff1433; }
+
+.en-icon { font-size: 14px; }
+.en-val  { font: 700 13px/1 var(--font-d); color: var(--tx-1); }
+.en-label { font: 500 8px/1 var(--font-d); color: var(--tx-3); letter-spacing: 0.5px; text-transform: uppercase; text-align: center; }
+
+.chart-empty {
+    font-size: 11px;
+    color: var(--tx-3);
+    text-align: center;
+    padding: 16px 0;
+    font-style: italic;
+}
+
+/* ── MISSION SCORE WIDGET ── */
+.ms-grade-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.ms-grade-box {
+    width: 58px;
+    height: 58px;
+    border-radius: 10px;
+    border: 2px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: rgba(0,0,0,0.3);
+}
+
+.ms-grade-letter {
+    font: 900 36px/1 var(--font-d);
+}
+
+.ms-grade-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ms-grade-label {
+    font: 700 14px/1 var(--font-d);
+    letter-spacing: 1px;
+}
+
+.ms-grade-score {
+    font: 600 11px/1 var(--font-d);
+    color: var(--tx-2);
+}
+
+.ms-grade-status {
+    font-size: 10px;
+    color: var(--tx-3);
+}
+
+.ms-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.ms-bar-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.ms-bar-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ms-bar-label {
+    font: 500 9px/1 var(--font-d);
+    color: var(--tx-3);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+.ms-bar-val {
+    font: 700 10px/1 var(--font-d);
+}
+
+.ms-bar-pct {
+    font-weight: 400;
+    color: var(--tx-3);
+}
+
+.ms-bar-track {
+    height: 5px;
+    background: #1e1e32;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.ms-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+.ms-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 5px;
+}
+
+.ms-sum-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 3px;
+    font-size: 9px;
+    color: var(--tx-3);
+    text-align: center;
+}
+
+.ms-sum-item b {
+    font: 700 11px/1 var(--font-d);
+    color: var(--tx-1);
+}

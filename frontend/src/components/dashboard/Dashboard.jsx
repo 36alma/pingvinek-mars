@@ -5,6 +5,8 @@ import StatsPanel from './StatsPanel';
 import Charts from './Charts';
 import EventLog from './EventLog';
 import RoverPreview from './RoverPreview';
+import EnergyBalance from './EnergyBalance';
+import MissionScore from './MissionScore';
 
 export default function Dashboard({ side }) {
     if (side === 'left') {
@@ -30,6 +32,8 @@ export default function Dashboard({ side }) {
                 <p>Telemetria & Napló</p>
             </div>
             <div className="dash-grid">
+                <MissionScore />
+                <EnergyBalance />
                 <Charts />
                 <EventLog />
             </div>
