@@ -84,15 +84,151 @@ function Lighting() {
 }
 
 /**
+ * Visible Sun sphere that orbits the map in sync with the day/night tick
+ */
+function Sun() {
+    const groupRef = useRef();
+    const glowRef = useRef();
+    const tickRef = useRef(0);
+    const center = MAP_SIZE / 2 - 0.5;
+
+    useEffect(() => {
+        return useStore.subscribe((s) => { tickRef.current = s.tick; });
+    }, []);
+
+    useFrame((state) => {
+        if (!groupRef.current) return;
+        const tick = tickRef.current;
+        const cyclePos = tick % 48;
+        const t = state.clock.elapsedTime;
+
+        // Full orbit: day arc (0→PI) then dip below horizon at night
+        const dayFrac = cyclePos / 48;
+        const angle = dayFrac * Math.PI * 2 - Math.PI / 2;
+        const orbitR = 95;
+        const orbitH = 60;
+
+        groupRef.current.position.set(
+            center + Math.cos(angle) * orbitR,
+            Math.sin(angle) * orbitH,
+            center - 15,
+        );
+
+        // Pulse glow
+        if (glowRef.current) {
+            const pulse = 1 + Math.sin(t * 1.5) * 0.08;
+            glowRef.current.scale.setScalar(pulse);
+        }
+
+        // Color: orange at horizon, bright white-yellow at zenith
+        const elevation = Math.sin(angle); // -1..1
+        const col = new THREE.Color();
+        if (elevation > 0) {
+            col.lerpColors(new THREE.Color(0xff6622), new THREE.Color(0xffffc0), elevation);
+        } else {
+            col.set(0x221100); // below horizon: dark
+        }
+        if (groupRef.current.children[0]?.material) {
+            groupRef.current.children[0].material.emissive.copy(col);
+            groupRef.current.children[0].material.color.copy(col);
+        }
+        if (glowRef.current?.material) {
+            glowRef.current.material.color.copy(col);
+            glowRef.current.material.opacity = Math.max(0, elevation) * 0.25;
+        }
+    });
+
+    return (
+        <group ref={groupRef}>
+            {/* Core sun sphere */}
+            <mesh>
+                <sphereGeometry args={[3.5, 24, 24]} />
+                <meshStandardMaterial
+                    color="#ffffa0"
+                    emissive="#ffcc00"
+                    emissiveIntensity={2.5}
+                    roughness={0}
+                    metalness={0}
+                />
+            </mesh>
+            {/* Glow halo */}
+            <mesh ref={glowRef}>
+                <sphereGeometry args={[6.5, 16, 16]} />
+                <meshBasicMaterial
+                    color="#ffaa00"
+                    transparent
+                    opacity={0.18}
+                    side={THREE.BackSide}
+                    depthWrite={false}
+                />
+            </mesh>
+            {/* Outer corona */}
+            <mesh>
+                <sphereGeometry args={[9, 12, 12]} />
+                <meshBasicMaterial
+                    color="#ff8800"
+                    transparent
+                    opacity={0.07}
+                    side={THREE.BackSide}
+                    depthWrite={false}
+                />
+            </mesh>
+        </group>
+    );
+}
+
+/**
+ * Space skybox: nebula-like colored dust clouds around the scene
+ */
+function SpaceSkybox() {
+    const center = MAP_SIZE / 2 - 0.5;
+
+    // Generate nebula cloud positions deterministically
+    const clouds = useRef(() => {
+        const arr = [];
+        const rng = (s) => { let x = Math.sin(s) * 43758.5453; return x - Math.floor(x); };
+        const colors = [0x1a0a2e, 0x0a1a2e, 0x2e0a0a, 0x0a2e1a, 0x1a1a3e];
+        for (let i = 0; i < 18; i++) {
+            arr.push({
+                x: center + (rng(i * 3.1) - 0.5) * 380,
+                y: 20 + rng(i * 7.3) * 120,
+                z: center + (rng(i * 5.7) - 0.5) * 380,
+                scale: 25 + rng(i * 2.9) * 60,
+                color: colors[i % colors.length],
+                opacity: 0.04 + rng(i * 4.1) * 0.08,
+            });
+        }
+        return arr;
+    }).current();
+
+    return (
+        <group>
+            {/* Nebula dust clouds */}
+            {clouds.map((c, i) => (
+                <mesh key={i} position={[c.x, c.y, c.z]}>
+                    <sphereGeometry args={[c.scale, 7, 7]} />
+                    <meshBasicMaterial
+                        color={c.color}
+                        transparent
+                        opacity={c.opacity}
+                        side={THREE.BackSide}
+                        depthWrite={false}
+                    />
+                </mesh>
+            ))}
+        </group>
+    );
+}
+
+/**
  * Mars atmosphere: stars + fog
- * Only re-renders when day/night phase changes (every 32 ticks)
  */
 function Atmosphere() {
     const isDay = useStore((s) => (s.tick % 48) < 32);
 
     return (
         <>
-            <Stars radius={120} depth={60} count={2000} factor={5} saturation={0} fade speed={0.3} />
+            <Stars radius={160} depth={80} count={3500} factor={6} saturation={0.3} fade speed={0.2} />
             <fog attach="fog" args={[isDay ? '#c47040' : '#1a1a3a', 35, 90]} />
         </>
     );
@@ -108,7 +244,6 @@ function CameraFollow({ orbitRef }) {
     const targetVec = useRef(new THREE.Vector3());
 
     useEffect(() => {
-        // Initialize from store immediately (not just on change)
         const s = useStore.getState();
         roverXRef.current = s.roverX;
         roverYRef.current = s.roverY;
@@ -121,10 +256,7 @@ function CameraFollow({ orbitRef }) {
 
     useFrame(() => {
         if (!orbitRef.current) return;
-
         targetVec.current.set(roverXRef.current, 0, roverYRef.current);
-
-        // Lerp the target toward the rover; camera follows automatically via OrbitControls
         orbitRef.current.target.lerp(targetVec.current, 0.08);
         orbitRef.current.update();
     });
@@ -135,22 +267,22 @@ function CameraFollow({ orbitRef }) {
 export default function MarsScene() {
     const center = MAP_SIZE / 2 - 0.5;
     const orbitRef = useRef();
-
-    // Start camera above the rover's initial position (= startX, startY from store)
     const { startX, startY } = useStore.getState();
 
     return (
         <div style={{ width: '100%', height: '100%' }}>
             <Canvas
-                camera={{ position: [startX, 40, startY + 35], fov: 45, near: 0.1, far: 250 }}
+                camera={{ position: [startX, 40, startY + 35], fov: 45, near: 0.1, far: 500 }}
                 shadows={{ type: 'PCFSoftShadowMap' }}
                 gl={{ antialias: false, toneMapping: 1, toneMappingExposure: 1.2, powerPreference: 'high-performance' }}
-                style={{ background: '#120808' }}
+                style={{ background: '#020408' }}
                 frameloop="always"
                 performance={{ min: 0.5 }}
             >
                 <Lighting />
                 <Atmosphere />
+                <SpaceSkybox />
+                <Sun />
                 <Terrain />
                 <Rover />
                 <PathLine />
@@ -158,7 +290,7 @@ export default function MarsScene() {
                 <OrbitControls
                     ref={orbitRef}
                     target={[startX, 0, startY]}
-                    maxDistance={90}
+                    maxDistance={120}
                     minDistance={4}
                     maxPolarAngle={Math.PI / 2.05}
                     enableDamping
