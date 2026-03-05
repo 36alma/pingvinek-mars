@@ -69,3 +69,12 @@ class MapService:
         else:
             print(f"Unknown map type: {map_type}")
             return None
+
+    def where_is_start(self):
+        fullmap = self._read_csv()
+        for key, value in fullmap[0].items():
+            if value == "S":
+                return key
+        else:
+            print("No start found")
+            return None
