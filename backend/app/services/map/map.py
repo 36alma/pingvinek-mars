@@ -70,6 +70,27 @@ class MapService:
             print(f"Unknown map type: {map_type}")
             return None
 
+    def get_full_map_OBJ(self) -> Tuple[Dict[str, BaseMapBlock], int, int]:
+        csv_map, rows, cols = self._read_csv()
+        obj_map: Dict[str, BaseMapBlock] = {}
+        for key, value in csv_map.items():
+            if value == ".":
+                obj_map[key] = AirMapBlock()
+            elif value == "#":
+                obj_map[key] = WallMapBlock()
+            elif value == "B":
+                obj_map[key] = BlueOreMapBlock()
+            elif value == "Y":
+                obj_map[key] = YellowOreMapBlock()
+            elif value == "G":
+                obj_map[key] = GreenOreMapBlock()
+            elif value == "S":
+                obj_map[key] = StartMapBlock()
+            else:
+                print(f"Unknown map type: {value}")
+                obj_map[key] = AirMapBlock()
+        return obj_map, rows, cols
+
     def where_is_start(self):
         fullmap = self._read_csv()
         for key, value in fullmap[0].items():
