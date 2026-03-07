@@ -1,4 +1,5 @@
 from enum import Enum
+from schemas.JSON import JsonBase
 
 class MapTypes(Enum):
     AIR = "air"
@@ -8,7 +9,7 @@ class MapTypes(Enum):
     GREEN_ORE = "green_ore"
     START = "start"
 
-class BaseMapBlock():
+class BaseMapBlock(JsonBase):
     def __init__(self):
         self.type:MapTypes
 
