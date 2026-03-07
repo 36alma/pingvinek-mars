@@ -1,51 +1,70 @@
-from schemas.JSON.map_block import (
-    AirMapBlock,
-    WallMapBlock,
-    BlueOreMapBlock,
-    YellowOreMapBlock,
-    GreenOreMapBlock,
-    StartMapBlock
-)
+from schemas.JSON.map_block import AirMapBlock, WallMapBlock
 from services.map.map import MapService
 
 class queue_model():
-    def __init__(self,x:int,y:int):
+    def __init__(self, x: int, y: int):
         self.x = x
         self.y = y
-    
+
 class OreDistanceService():
     def __init__(self):
         self.map_service = MapService()
-        self.full_map = MapService().get_full_map_OBJ()
 
-    def get_ore_distance(self,ore_one_x:int,ore_one_y:int,ore_two_x:int,ore_two_y:int):
-        relative_minimum_distance = abs(ore_two_x + ore_two_y - ore_one_x - ore_one_y)
-        if relative_minimum_distance != 0:
-            ore_one = queue_model(x=ore_one_x,y=ore_one_y)
-            ore_two = queue_model(x=ore_two_x,y=ore_two_y)
-            queue = [ore_one]
-            parent: dict[str, str] = {}
-            visited: list[str] = []
-            while queue:
-                u = queue.pop(0)
-                if u.x == ore_two.x and u.y == ore_two.y:
-                    break
-                for x in range(-1,2):
-                    for y in range(-1,2):
-                        new_cors = queue_model(x=u.x + x,y=u.y + y)
-                        new_cors_block_type = self.map_service.get_map_block_type(new_cors.x,new_cors.y)
-                        print(new_cors_block_type)
-                        if not isinstance(new_cors_block_type,AirMapBlock): #pyright: ignore
-                            continue
-                        if f"({new_cors.x},{new_cors.y})" in visited:
-                            continue
-                        parent[f"({new_cors.x},{new_cors.y})"] = f"({u.x},{u.y})"
-                        visited.append(f"({new_cors.x},{new_cors.y})")
-                        queue.append(new_cors)
-            print(parent)
-        elif relative_minimum_distance == 0:
-            # Ez majd meg kell oldani, hogy ne legyen 0 a távolság
-            if ore_two_x == ore_one_x and ore_two_y == ore_one_y:
-                return 0
-            else:
-                return 1
+    def get_ore_distance(self, ore_one_x: int, ore_one_y: int, ore_two_x: int, ore_two_y: int) -> list[tuple[int, int]] | None:
+        # Ha a két pont ugyanaz, az útvonal csak maga a pont
+        if ore_one_x == ore_two_x and ore_one_y == ore_two_y:
+            return [(ore_one_x, ore_one_y)]
+
+        ore_one = queue_model(x=ore_one_x, y=ore_one_y)
+        ore_two = queue_model(x=ore_two_x, y=ore_two_y)
+
+        start_key = f"({ore_one.x},{ore_one.y})"
+        queue = [ore_one]
+        parent: dict[str, str] = {start_key: ""}
+        visited: set[str] = {start_key}
+
+        # 4 irányú mozgás (fel, le, balra, jobbra)
+        directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+
+        found = False
+        while queue:
+            u = queue.pop(0)
+            if u.x == ore_two.x and u.y == ore_two.y:
+                found = True
+                break
+
+            for dx, dy in directions:
+                new_x = u.x + dx
+                new_y = u.y + dy
+                new_key = f"({new_x},{new_y})"
+
+                if new_key in visited:
+                    continue
+
+                block_type = self.map_service.get_map_block_type(new_x, new_y)
+
+                # Fal és ismeretlen blokkok nem járhatók
+                if block_type is None or isinstance(block_type, WallMapBlock):
+                    visited.add(new_key)
+                    continue
+
+                visited.add(new_key)
+                parent[new_key] = f"({u.x},{u.y})"
+                queue.append(queue_model(x=new_x, y=new_y))
+
+        if not found:
+            return None
+
+        # Útvonal visszafejtése a parent lánc alapján
+        path: list[tuple[int, int]] = []
+        current_key = f"({ore_two.x},{ore_two.y})"
+        while current_key != "":
+            # "(x,y)" formátumból kinyerjük x-et és y-t
+            inner = current_key[1:-1]  # zárójelek levágása
+            x_str, y_str = inner.split(",")
+            path.append((int(x_str), int(y_str)))
+            current_key = parent[current_key]
+
+        path.reverse()
+        return path
+
