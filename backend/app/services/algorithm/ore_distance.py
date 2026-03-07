@@ -48,6 +48,8 @@ class OreDistanceService():
                     visited.add(new_key)
                     continue
 
+                if block_type is not None and isinstance(block_type,)
+
                 visited.add(new_key)
                 parent[new_key] = f"({u.x},{u.y})"
                 queue.append(queue_model(x=new_x, y=new_y))
