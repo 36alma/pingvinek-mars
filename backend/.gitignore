@@ -14,5 +14,5 @@ pyrightconfig.json
 .cursor
 .antigravity
 .todo
-test/
+test.py
 *.swp
