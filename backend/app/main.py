@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.v1.map_router import app as map_router
 from api.v1.rover_router import app as rover_router
+from schemas.JSON.rover import Rover
 
 app = FastAPI(
     title="Pingvinek Mars API",
@@ -20,6 +21,7 @@ app.add_middleware(
 )
 app.include_router(map_router)
 app.include_router(rover_router)
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
