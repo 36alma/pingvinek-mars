@@ -11,15 +11,27 @@ from schemas.JSON.map_block import (
     GreenOreMapBlock,
     StartMapBlock
     )
+from schemas.JSON.cors import Cors 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data")
 CSV_PATH = os.path.join(DATA_DIR, "map.csv")
 
 
 class MapService:
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
     def __init__(self) -> None:
+        if self._initialized:
+            return
+        self._initialized = True
         self._csv_path = CSV_PATH
         self._coord_map, self._rows, self._cols = self._load_csv()
-
+        self.cors_map = self.get_full_map_OBJ()
     def _load_csv(self) -> Tuple[Dict[str, str], int, int]:
         """CSV fájl egyszeri beolvasása koordináta-alapon.
 
@@ -57,7 +69,10 @@ class MapService:
         """
         if 0 <= x < self._cols and 0 <= y < self._rows:
             self._coord_map[f"{x},{y}"] = tile
-            return True
+            tile_obj = self.get_tile_obj_type(tile=tile)
+            if isinstance(tile_obj, BaseMapBlock):
+                self.cors_map[f"{x},{y}"] = tile_obj
+                return True
         print(f"Coordinates out of bounds: {x},{y}")
         return False
 
@@ -110,13 +125,32 @@ class MapService:
                 obj_map[key] = AirMapBlock()
         return obj_map
 
-    def where_is_start(self):
+    def where_is_start(self) -> Cors | None:
         for key, value in self._coord_map.items():
             if value == "S":
-                return key
+                return Cors(int(key.split(",")[0]), int(key.split(",")[1]))
         print("No start found")
         return None
+
 
     def change_air(self, x: int, y: int) -> bool:
         """Adott mező levegővé ('.') alakítása."""
         return self.set_tile(x, y, ".")
+
+
+    def get_tile_obj_type(self,*,tile:str) -> BaseMapBlock|None:
+        if tile == ".":
+            return AirMapBlock()
+        elif tile == "#":
+            return WallMapBlock()
+        elif tile == "B":
+            return BlueOreMapBlock()
+        elif tile == "Y":
+            return YellowOreMapBlock()
+        elif tile == "G":
+            return GreenOreMapBlock()
+        elif tile == "S":
+            return StartMapBlock()
+        else:
+            print(f"Unknown map type: {tile}")
+            return None
