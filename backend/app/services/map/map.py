@@ -18,9 +18,10 @@ CSV_PATH = os.path.join(DATA_DIR, "map.csv")
 class MapService:
     def __init__(self) -> None:
         self._csv_path = CSV_PATH
+        self._coord_map, self._rows, self._cols = self._load_csv()
 
-    def _read_csv(self) -> Tuple[Dict[str, str], int, int]:
-        """CSV fájl beolvasása koordináta-alapon.
+    def _load_csv(self) -> Tuple[Dict[str, str], int, int]:
+        """CSV fájl egyszeri beolvasása koordináta-alapon.
 
         Visszaad egy tuple-t: (coord_map, rows, cols)
         coord_map kulcsa: "x,y" formátumú string,
@@ -43,14 +44,33 @@ class MapService:
                         cols = x + 1
         return coord_map, rows, cols
 
+    def set_tile(self, x: int, y: int, tile: str) -> bool:
+        """Egy mező értékének módosítása az in-memory térképen.
+
+        Args:
+            x: X koordináta (0-tól indexelve).
+            y: Y koordináta (0-tól indexelve).
+            tile: Az új csempe karakter (pl. '.', '#', 'B', 'Y', 'G', 'S').
+
+        Returns:
+            True ha sikeres, False ha a koordináta érvénytelen.
+        """
+        if 0 <= x < self._cols and 0 <= y < self._rows:
+            self._coord_map[f"{x},{y}"] = tile
+            return True
+        print(f"Coordinates out of bounds: {x},{y}")
+        return False
+
     def get_map(self) -> MapResponse:
         """Térkép adatok lekérése JSON formátumban koordináta-kulcsokkal."""
-        coord_map, rows, cols = self._read_csv()
-        return MapResponse(map=coord_map, rows=rows, cols=cols)
+        return MapResponse(map=self._coord_map, rows=self._rows, cols=self._cols)
 
     def get_map_block_type(self, x: int, y: int) -> BaseMapBlock|None:
-        if x >= 0 and y >= 0 and x<= 49 and y<= 49:
-            map_type = self._read_csv()[0][f"{x},{y}"]
+        if x >= 0 and y >= 0 and x <= 49 and y <= 49:
+            map_type = self._coord_map.get(f"{x},{y}")
+            if map_type is None:
+                print(f"Tile not found at: {x},{y}")
+                return None
         else:
             print(f"Coordinates out of bounds: {x},{y}")
             return None
@@ -70,10 +90,9 @@ class MapService:
             print(f"Unknown map type: {map_type}")
             return None
 
-    def get_full_map_OBJ(self) -> Tuple[Dict[str, BaseMapBlock], int, int]:
-        csv_map, rows, cols = self._read_csv()
+    def get_full_map_OBJ(self) -> Dict[str, BaseMapBlock]:
         obj_map: Dict[str, BaseMapBlock] = {}
-        for key, value in csv_map.items():
+        for key, value in self._coord_map.items():
             if value == ".":
                 obj_map[key] = AirMapBlock()
             elif value == "#":
@@ -89,13 +108,15 @@ class MapService:
             else:
                 print(f"Unknown map type: {value}")
                 obj_map[key] = AirMapBlock()
-        return obj_map, rows, cols
+        return obj_map
 
     def where_is_start(self):
-        fullmap = self._read_csv()
-        for key, value in fullmap[0].items():
+        for key, value in self._coord_map.items():
             if value == "S":
                 return key
-        else:
-            print("No start found")
-            return None
+        print("No start found")
+        return None
+
+    def change_air(self, x: int, y: int) -> bool:
+        """Adott mező levegővé ('.') alakítása."""
+        return self.set_tile(x, y, ".")
