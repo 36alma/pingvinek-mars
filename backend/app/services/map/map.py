@@ -87,7 +87,7 @@ class MapService:
                 print(f"Tile not found at: {x},{y}")
                 return None
         else:
-            print(f"Coordinates out of bounds: {x},{y}")
+            # print(f"Coordinates out of bounds: {x},{y}")
             return None
         if map_type == ".":
             return AirMapBlock()
