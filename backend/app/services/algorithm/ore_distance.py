@@ -1,11 +1,6 @@
 from schemas.JSON.map_block import AirMapBlock, WallMapBlock
 from services.map.map import MapService
-
-class queue_model():
-    def __init__(self, x: int, y: int):
-        self.x = x
-        self.y = y
-
+from schemas.JSON.cors import Cors
 class OreDistanceService():
     def __init__(self):
         self.map_service = MapService()
@@ -15,8 +10,8 @@ class OreDistanceService():
         if ore_one_x == ore_two_x and ore_one_y == ore_two_y:
             return [(ore_one_x, ore_one_y)]
 
-        ore_one = queue_model(x=ore_one_x, y=ore_one_y)
-        ore_two = queue_model(x=ore_two_x, y=ore_two_y)
+        ore_one = Cors(x=ore_one_x, y=ore_one_y)
+        ore_two = Cors(x=ore_two_x, y=ore_two_y)
 
         start_key = f"({ore_one.x},{ore_one.y})"
         queue = [ore_one]
@@ -40,6 +35,8 @@ class OreDistanceService():
 
                 if new_key in visited:
                     continue
+                if not (0 <= new_x <= 50 and 0 <= new_y <= 50):
+                        continue
 
                 block_type = self.map_service.get_map_block_type(new_x, new_y)
 
@@ -48,11 +45,9 @@ class OreDistanceService():
                     visited.add(new_key)
                     continue
 
-                if block_type is not None and isinstance(block_type,)
-
                 visited.add(new_key)
                 parent[new_key] = f"({u.x},{u.y})"
-                queue.append(queue_model(x=new_x, y=new_y))
+                queue.append(Cors(x=new_x, y=new_y))
 
         if not found:
             return None
