@@ -13,6 +13,10 @@ class BaseMapBlock(JsonBase):
     def __init__(self):
         self.type:MapTypes
 
+class OreBaseMapBlock(BaseMapBlock):
+    def __init__(self):
+        self.type:MapTypes
+
 class AirMapBlock(BaseMapBlock):
     def __init__(self):
         self.type = MapTypes.AIR
@@ -21,15 +25,15 @@ class WallMapBlock(BaseMapBlock):
     def __init__(self):
         self.type = MapTypes.WALL
 
-class BlueOreMapBlock(BaseMapBlock):
+class BlueOreMapBlock(OreBaseMapBlock):
     def __init__(self):
         self.type = MapTypes.BLUE_ORE
 
-class YellowOreMapBlock(BaseMapBlock):
+class YellowOreMapBlock(OreBaseMapBlock):
     def __init__(self):
         self.type = MapTypes.YELLOW_ORE
 
-class GreenOreMapBlock(BaseMapBlock):
+class GreenOreMapBlock(OreBaseMapBlock):
     def __init__(self):
         self.type = MapTypes.GREEN_ORE
 
