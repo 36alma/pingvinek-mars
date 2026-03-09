@@ -1,113 +1,74 @@
 import { useRef, Suspense } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader';
 import { useStore } from '../../store/store';
+import * as THREE from 'three';
 
-function RoverModel({ isMoving, isMining, battery }) {
-    const group = useRef();
-    const wheels = [useRef(), useRef(), useRef(), useRef(), useRef(), useRef()];
-    const panelRef = useRef();
+function STLModel({ battery }) {
+    const geometry = useLoader(STLLoader, '/rover2.stl');
     const antennaLight = useRef();
 
+    const { scale, offset } = (() => {
+        geometry.computeBoundingBox();
+        const box = geometry.boundingBox;
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const s = 1.6 / maxDim;
+        const c = new THREE.Vector3();
+        box.getCenter(c);
+        return { scale: s, offset: c };
+    })();
+
+    const batColor = battery > 60 ? '#39ff14' : battery > 30 ? '#ffc107' : '#ff1744';
+
     useFrame((state) => {
-        if (!group.current) return;
-        // Slow idle rotation when not manually dragging
-        // Wheel spin
-        wheels.forEach((w) => {
-            if (w.current) w.current.rotation.x += isMoving ? 0.06 : 0.008;
-        });
-        // Solar panel gentle tilt
-        if (panelRef.current) {
-            panelRef.current.rotation.x = -0.15 + Math.sin(state.clock.elapsedTime * 0.4) * 0.03;
-        }
-        // Antenna blink
-        if (antennaLight.current) {
-            antennaLight.current.material.emissiveIntensity = 0.3 + Math.sin(state.clock.elapsedTime * 4) * 0.5;
-        }
-        // Mining bobble
-        if (isMining && group.current) {
-            group.current.position.y = Math.sin(state.clock.elapsedTime * 8) * 0.015;
-        }
+        if (antennaLight.current)
+            antennaLight.current.material.emissiveIntensity = 0.4 + Math.sin(state.clock.elapsedTime * 4) * 0.6;
     });
 
-    const battColor = battery > 60 ? '#39ff14' : battery > 30 ? '#ffc107' : '#ff1744';
-
     return (
-        <group ref={group}>
-            {/* Body chassis */}
-            <mesh castShadow>
-                <boxGeometry args={[0.55, 0.16, 0.75]} />
-                <meshStandardMaterial color="#e0e0e0" emissive="#444444" emissiveIntensity={0.2} metalness={0.5} roughness={0.35} />
+        <group>
+            <mesh
+                geometry={geometry}
+                castShadow
+                scale={[scale, scale, scale]}
+                position={[-offset.x * scale, -offset.y * scale, -offset.z * scale]}
+                rotation={[-Math.PI / 2, 0, 0]}
+            >
+                <meshStandardMaterial color="#c8c8c8" emissive="#333" emissiveIntensity={0.2} metalness={0.5} roughness={0.45} />
             </mesh>
-            {/* Body top */}
-            <mesh position={[0, 0.1, -0.05]} castShadow>
-                <boxGeometry args={[0.42, 0.1, 0.5]} />
-                <meshStandardMaterial color="#d0d0d0" emissive="#333333" emissiveIntensity={0.2} metalness={0.4} roughness={0.4} />
-            </mesh>
-
-            {/* Camera mast */}
-            <mesh position={[0, 0.28, -0.2]}>
-                <cylinderGeometry args={[0.018, 0.022, 0.3, 8]} />
-                <meshStandardMaterial color="#aaa" metalness={0.6} roughness={0.3} />
-            </mesh>
-            <mesh position={[0, 0.45, -0.2]}>
-                <boxGeometry args={[0.14, 0.07, 0.1]} />
-                <meshStandardMaterial color="#444" metalness={0.5} roughness={0.3} />
-            </mesh>
-            {/* Lens */}
-            <mesh position={[0, 0.45, -0.26]} rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[0.022, 0.022, 0.02, 10]} />
-                <meshStandardMaterial color="#111133" metalness={0.9} roughness={0.05} />
-            </mesh>
-
-            {/* Solar panel */}
-            <group ref={panelRef} position={[0, 0.22, 0.1]}>
-                <mesh castShadow>
-                    <boxGeometry args={[0.75, 0.015, 0.5]} />
-                    <meshStandardMaterial color="#1a237e" emissive="#1a237e" emissiveIntensity={0.4} metalness={0.3} roughness={0.3} />
-                </mesh>
-                {[-0.2, 0, 0.2].map((z, i) => (
-                    <mesh key={i} position={[0, 0.009, z]}>
-                        <boxGeometry args={[0.73, 0.003, 0.01]} />
-                        <meshStandardMaterial color="#3949ab" />
-                    </mesh>
-                ))}
-            </group>
-
-            {/* 6 wheels */}
-            {[
-                [-0.3, -0.1, -0.28], [-0.3, -0.1, 0], [-0.3, -0.1, 0.28],
-                [0.3, -0.1, -0.28],  [0.3, -0.1, 0],  [0.3, -0.1, 0.28],
-            ].map((pos, i) => (
-                <mesh key={i} ref={wheels[i]} position={pos} rotation={[0, 0, Math.PI / 2]} castShadow>
-                    <cylinderGeometry args={[0.07, 0.07, 0.05, 10]} />
-                    <meshStandardMaterial color="#333" roughness={0.8} />
-                </mesh>
-            ))}
-
-            {/* Antenna */}
-            <mesh position={[0.18, 0.25, 0.25]}>
-                <cylinderGeometry args={[0.006, 0.006, 0.22, 5]} />
-                <meshStandardMaterial color="#ccc" metalness={0.7} roughness={0.3} />
-            </mesh>
-            <mesh ref={antennaLight} position={[0.18, 0.37, 0.25]}>
-                <sphereGeometry args={[0.022, 6, 6]} />
+            <mesh ref={antennaLight} position={[0, 1.1, 0]}>
+                <sphereGeometry args={[0.04, 6, 6]} />
                 <meshStandardMaterial color="#ff3333" emissive="#ff3333" emissiveIntensity={0.8} />
             </mesh>
-
-            {/* Headlights */}
-            {[-0.16, 0.16].map((x, i) => (
-                <mesh key={i} position={[x, -0.02, -0.38]}>
-                    <sphereGeometry args={[0.025, 6, 6]} />
-                    <meshStandardMaterial color="#ffffdd" emissive="#ffffdd" emissiveIntensity={isMoving ? 1.2 : 0.3} />
-                </mesh>
-            ))}
-
-            {/* Battery indicator strip on chassis */}
-            <mesh position={[0, 0.09, 0.38]}>
-                <boxGeometry args={[0.3, 0.04, 0.01]} />
-                <meshStandardMaterial color={battColor} emissive={battColor} emissiveIntensity={0.9} />
+            {/* Battery indicator */}
+            <mesh position={[0, -0.9, 0.55]}>
+                <boxGeometry args={[0.5 * (battery / 100), 0.06, 0.02]} />
+                <meshStandardMaterial color={batColor} emissive={batColor} emissiveIntensity={0.9} />
             </mesh>
+        </group>
+    );
+}
+
+function FallbackModel({ battery }) {
+    const group = useRef();
+    const antennaLight = useRef();
+    useFrame((state) => {
+        if (antennaLight.current)
+            antennaLight.current.material.emissiveIntensity = 0.3 + Math.sin(state.clock.elapsedTime * 4) * 0.5;
+    });
+    const batColor = battery > 60 ? '#39ff14' : battery > 30 ? '#ffc107' : '#ff1744';
+    return (
+        <group ref={group}>
+            <mesh castShadow><boxGeometry args={[0.55, 0.16, 0.75]} /><meshStandardMaterial color="#e0e0e0" emissive="#444" emissiveIntensity={0.2} metalness={0.5} roughness={0.35} /></mesh>
+            <mesh position={[0, 0.1, -0.05]}><boxGeometry args={[0.42, 0.1, 0.5]} /><meshStandardMaterial color="#d0d0d0" /></mesh>
+            {[[-0.3,-0.1,-0.28],[-0.3,-0.1,0],[-0.3,-0.1,0.28],[0.3,-0.1,-0.28],[0.3,-0.1,0],[0.3,-0.1,0.28]].map((pos, i) => (
+                <mesh key={i} position={pos} rotation={[0,0,Math.PI/2]}><cylinderGeometry args={[0.07,0.07,0.05,10]} /><meshStandardMaterial color="#333" /></mesh>
+            ))}
+            <mesh ref={antennaLight} position={[0.18,0.37,0.25]}><sphereGeometry args={[0.022,6,6]} /><meshStandardMaterial color="#ff3333" emissive="#ff3333" emissiveIntensity={0.8} /></mesh>
+            <mesh position={[0, 0.09, 0.38]}><boxGeometry args={[0.3, 0.04, 0.01]} /><meshStandardMaterial color={batColor} emissive={batColor} emissiveIntensity={0.9} /></mesh>
         </group>
     );
 }
@@ -138,35 +99,20 @@ export default function RoverPreview() {
         <div className="widget rover-preview-widget">
             <h3><span className="widget-icon">🤖</span> Rover 3D nézet</h3>
 
-            {/* 3D Canvas */}
             <div className="rover-canvas-wrap">
-                <Canvas
-                    camera={{ position: [1.8, 1.2, 2.2], fov: 40 }}
-                    gl={{ antialias: true, alpha: true }}
-                    style={{ background: 'transparent' }}
-                >
+                <Canvas camera={{ position: [1.8, 1.2, 2.2], fov: 40 }} gl={{ antialias: true, alpha: true }} style={{ background: 'transparent' }}>
                     <ambientLight intensity={1.2} color="#ccccff" />
                     <directionalLight position={[3, 5, 3]} intensity={1.5} color="#ffffff" />
                     <directionalLight position={[-3, 2, -2]} intensity={0.5} color="#ff9944" />
                     <pointLight position={[0, 2, 0]} intensity={0.8} color="#8899cc" />
-                    <Suspense fallback={null}>
-                        <RoverModel isMoving={isMoving} isMining={isMining} battery={battery} />
+                    <Suspense fallback={<FallbackModel battery={battery} />}>
+                        <STLModel battery={battery} />
                     </Suspense>
-                    <OrbitControls
-                        enablePan={false}
-                        enableZoom={true}
-                        minDistance={1.2}
-                        maxDistance={4}
-                        autoRotate={!isMoving && !isMining}
-                        autoRotateSpeed={1.2}
-                    />
+                    <OrbitControls enablePan={false} enableZoom={true} minDistance={1.2} maxDistance={5} autoRotate={!isMoving && !isMining} autoRotateSpeed={1.2} />
                 </Canvas>
-                <div className="rover-state-badge" style={{ color: stateColor }}>
-                    {stateLabel}
-                </div>
+                <div className="rover-state-badge" style={{ color: stateColor }}>{stateLabel}</div>
             </div>
 
-            {/* Stats grid */}
             <div className="rp-stats">
                 <div className="rp-row">
                     <div className="rp-stat">
@@ -181,37 +127,17 @@ export default function RoverPreview() {
                 </div>
 
                 <div className="rp-row rp-row--4">
-                    <div className="rp-mini">
-                        <span className="rp-ml">Pozíció</span>
-                        <span className="rp-mv">({x}, {y})</span>
-                    </div>
-                    <div className="rp-mini">
-                        <span className="rp-ml">Sebesség</span>
-                        <span className="rp-mv" style={{ color: spdColor }}>{spdLabel}</span>
-                    </div>
-                    <div className="rp-mini">
-                        <span className="rp-ml">Megtett út</span>
-                        <span className="rp-mv">{dist} blk</span>
-                    </div>
-                    <div className="rp-mini">
-                        <span className="rp-ml">Útvonal</span>
-                        <span className="rp-mv">{pct}%</span>
-                    </div>
+                    <div className="rp-mini"><span className="rp-ml">Pozíció</span><span className="rp-mv">({x}, {y})</span></div>
+                    <div className="rp-mini"><span className="rp-ml">Sebesség</span><span className="rp-mv" style={{ color: spdColor }}>{spdLabel}</span></div>
+                    <div className="rp-mini"><span className="rp-ml">Megtett út</span><span className="rp-mv">{dist} blk</span></div>
+                    <div className="rp-mini"><span className="rp-ml">Útvonal</span><span className="rp-mv">{pct}%</span></div>
                 </div>
 
                 <div className="rp-minerals">
-                    <div className="rp-min-item blue">
-                        <span>💎</span><span className="rp-min-label">Vízjég</span><b>{inv.B}</b>
-                    </div>
-                    <div className="rp-min-item yellow">
-                        <span>🥇</span><span className="rp-min-label">Arany</span><b>{inv.Y}</b>
-                    </div>
-                    <div className="rp-min-item green">
-                        <span>🪨</span><span className="rp-min-label">Ritka</span><b>{inv.G}</b>
-                    </div>
-                    <div className="rp-min-item total">
-                        <span>📦</span><span className="rp-min-label">Össz.</span><b>{total}</b>
-                    </div>
+                    <div className="rp-min-item blue"><span>💎</span><span className="rp-min-label">Vízjég</span><b>{inv.B}</b></div>
+                    <div className="rp-min-item yellow"><span>🥇</span><span className="rp-min-label">Arany</span><b>{inv.Y}</b></div>
+                    <div className="rp-min-item green"><span>🪨</span><span className="rp-min-label">Ritka</span><b>{inv.G}</b></div>
+                    <div className="rp-min-item total"><span>📦</span><span className="rp-min-label">Össz.</span><b>{total}</b></div>
                 </div>
             </div>
         </div>
