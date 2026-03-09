@@ -35,6 +35,8 @@ class TopLayer():
                         ))
                 i.cluster_ores_distance = cluster_ores_distance
                 clusters_nears[i] = i.nearest_ore()
+                
+            
             
 
                 
