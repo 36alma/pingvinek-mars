@@ -120,8 +120,40 @@ export function generateMap(seed = 2026) {
 }
 
 /**
- * Extract mineral positions from map
+ * Parse API response into the internal 2D map array format.
+ * API returns: { map: {"x,y": "char", ...}, rows: 50, cols: 50 }
+ * Internal format: map[y][x] = char (2D array)
  */
+export function parseApiMap(apiResponse) {
+    const { map: coordMap, rows, cols } = apiResponse;
+    const size = Math.max(rows, cols, MAP_SIZE);
+
+    // Build empty 2D array
+    const map = Array.from({ length: size }, () =>
+        Array.from({ length: size }, () => CELL.EMPTY)
+    );
+
+    // Fill from API coords
+    for (const [key, val] of Object.entries(coordMap)) {
+        const [x, y] = key.split(',').map(Number);
+        if (y >= 0 && y < size && x >= 0 && x < size) {
+            map[y][x] = val;
+        }
+    }
+
+    // Find start position (S cell), fallback to center
+    let startX = 25, startY = 25;
+    outer: for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            if (map[y][x] === CELL.START) {
+                startX = x; startY = y;
+                break outer;
+            }
+        }
+    }
+
+    return { map, startX, startY };
+}
 export function findMinerals(map) {
     const minerals = [];
     for (let y = 0; y < MAP_SIZE; y++) {

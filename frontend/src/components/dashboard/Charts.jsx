@@ -19,13 +19,11 @@ const TT = {
 export default function Charts() {
     const logHistory = useStore((s) => s.logHistory);
 
-    // Thin data for chart perf (every 2nd point)
-    const batteryData = useMemo(() => {
+    const distData = useMemo(() => {
         return logHistory.filter((_, i) => i % 2 === 0).slice(-80);
     }, [logHistory]);
 
     const mineralData = useMemo(() => {
-        // Show cumulative mineral counts over time
         const pts = [];
         let lastTotal = 0;
         for (const p of logHistory) {
@@ -40,25 +38,6 @@ export default function Charts() {
     return (
         <div className="widget charts-widget">
             <h3><span className="widget-icon">📈</span> Grafikonok</h3>
-
-            <div className="chart-box">
-                <h4>Akkumulátor szint (%)</h4>
-                <ResponsiveContainer width="100%" height={130}>
-                    <AreaChart data={batteryData}>
-                        <defs>
-                            <linearGradient id="gBat" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#39ff14" stopOpacity={0.5} />
-                                <stop offset="100%" stopColor="#39ff14" stopOpacity={0.02} />
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1e1e32" />
-                        <XAxis dataKey="h" stroke="#555" fontSize={9} tickLine={false} />
-                        <YAxis domain={[0, 100]} stroke="#555" fontSize={9} tickLine={false} width={28} />
-                        <Tooltip {...TT} />
-                        <Area type="monotone" dataKey="battery" stroke="#39ff14" strokeWidth={2} fill="url(#gBat)" name="Akku %" />
-                    </AreaChart>
-                </ResponsiveContainer>
-            </div>
 
             {mineralData.length > 0 && (
                 <div className="chart-box">
@@ -80,7 +59,7 @@ export default function Charts() {
             <div className="chart-box">
                 <h4>Megtett távolság (blokk)</h4>
                 <ResponsiveContainer width="100%" height={110}>
-                    <AreaChart data={batteryData}>
+                    <AreaChart data={distData}>
                         <defs>
                             <linearGradient id="gDist" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="0%" stopColor="#ff9100" stopOpacity={0.4} />

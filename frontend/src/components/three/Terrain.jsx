@@ -43,7 +43,7 @@ function Obstacles({ positions }) {
     return (
         <instancedMesh ref={ref} args={[null, null, count]} castShadow receiveShadow>
             <boxGeometry args={[S * 0.85, 0.5, S * 0.85]} />
-            <meshStandardMaterial color="#7a7a7a" emissive="#222222" emissiveIntensity={0.3} roughness={0.95} metalness={0.05} />
+            <meshStandardMaterial color="#7a7a7a" emissive="#333333" emissiveIntensity={0.5} roughness={0.95} metalness={0.05} />
         </instancedMesh>
     );
 }
@@ -157,7 +157,7 @@ export default function Terrain() {
             {/* Ground */}
             <mesh position={[MAP_SIZE / 2 - 0.5, -0.05, MAP_SIZE / 2 - 0.5]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
                 <planeGeometry args={[MAP_SIZE, MAP_SIZE]} />
-                <meshStandardMaterial color="#b5451c" emissive="#3a1008" emissiveIntensity={0.4} roughness={0.92} />
+                <meshStandardMaterial color="#b5451c" emissive="#5a1a08" emissiveIntensity={0.6} roughness={0.92} />
             </mesh>
 
             {/* Grid */}

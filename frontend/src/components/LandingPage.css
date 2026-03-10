@@ -1,0 +1,398 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:ital,wght@0,300;0,400;0,600;1,300&family=Share+Tech+Mono&display=swap');
+
+/* ── ROOT ── */
+.lp-root {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    overflow: hidden;
+    font-family: 'Barlow', sans-serif;
+    transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lp-exit {
+    opacity: 0;
+    transform: scale(1.04);
+    pointer-events: none;
+}
+
+/* ── BACKGROUND LAYERS ── */
+.lp-bg {
+    position: absolute;
+    inset: 0;
+}
+
+.lp-bg-sky {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        to bottom,
+        #0a0503 0%,
+        #1a0a06 18%,
+        #3d1a0a 35%,
+        #6b2d12 50%,
+        #8b3d18 58%,
+        #a04a20 65%
+    );
+}
+
+.lp-bg-dust {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 120% 40% at 50% 60%, #c4602080 0%, transparent 70%);
+    animation: lp-dust-shift 8s ease-in-out infinite alternate;
+}
+
+@keyframes lp-dust-shift {
+    from { opacity: 0.6; transform: translateX(-1%); }
+    to   { opacity: 1;   transform: translateX(1%); }
+}
+
+.lp-bg-horizon {
+    position: absolute;
+    bottom: 28%;
+    left: 0; right: 0;
+    height: 120px;
+    background: linear-gradient(to bottom, transparent, #7a3018aa 40%, #5a200aee 100%);
+    filter: blur(8px);
+}
+
+.lp-bg-ground {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 32%;
+    background: linear-gradient(
+        to bottom,
+        #5a2010 0%,
+        #3d1208 30%,
+        #2a0c06 70%,
+        #1a0804 100%
+    );
+}
+
+/* Ground texture via noise pattern */
+.lp-bg-ground::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+        radial-gradient(ellipse 3px 2px at 12% 40%, #8b3a1855 0%, transparent 100%),
+        radial-gradient(ellipse 2px 1px at 34% 70%, #6b2a1244 0%, transparent 100%),
+        radial-gradient(ellipse 4px 2px at 67% 30%, #7a3018aa 0%, transparent 100%),
+        radial-gradient(ellipse 2px 3px at 85% 60%, #5a200844 0%, transparent 100%);
+    opacity: 0.8;
+}
+
+/* ── ROCKS ── */
+.lp-rocks { position: absolute; bottom: 0; left: 0; right: 0; height: 35%; }
+
+.lp-rock {
+    position: absolute;
+    background: radial-gradient(ellipse at 35% 30%, #8b4020, #3d1208);
+    border-radius: 45% 55% 50% 50% / 40% 40% 60% 60%;
+    transform: scale(var(--s, 1));
+    transform-origin: bottom center;
+    filter: drop-shadow(0 4px 12px #00000088);
+}
+
+.lp-rock--0 { width: 55px; height: 38px; }
+.lp-rock--1 { width: 38px; height: 28px; border-radius: 50% 50% 45% 55% / 35% 40% 60% 65%; }
+.lp-rock--2 { width: 72px; height: 45px; border-radius: 40% 60% 55% 45% / 45% 35% 65% 55%; }
+.lp-rock--3 { width: 28px; height: 22px; border-radius: 55% 45% 40% 60% / 50% 60% 40% 50%; }
+.lp-rock--4 { width: 90px; height: 52px; border-radius: 35% 65% 60% 40% / 40% 50% 50% 60%; }
+
+/* ── PARTICLES / DUST ── */
+.lp-particle {
+    position: absolute;
+    width: 2px; height: 2px;
+    background: #c4602066;
+    border-radius: 50%;
+    bottom: 25%;
+    animation: lp-float linear infinite;
+}
+
+@keyframes lp-float {
+    0%   { transform: translate(0, 0) scale(1); opacity: 0; }
+    20%  { opacity: 0.6; }
+    80%  { opacity: 0.3; }
+    100% { transform: translate(var(--x, 20px), -120px) scale(0.3); opacity: 0; }
+}
+
+/* ── STARS ── */
+.lp-star {
+    position: absolute;
+    width: 1.5px; height: 1.5px;
+    background: #fff;
+    border-radius: 50%;
+    animation: lp-twinkle ease-in-out infinite;
+}
+
+@keyframes lp-twinkle {
+    0%, 100% { opacity: 0.2; transform: scale(1); }
+    50%       { opacity: 0.9; transform: scale(1.4); }
+}
+
+/* ── OVERLAYS ── */
+.lp-scanlines {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 3px,
+        rgba(0,0,0,0.08) 3px,
+        rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+}
+
+.lp-vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 90% 90% at 50% 50%, transparent 40%, rgba(0,0,0,0.75) 100%);
+    pointer-events: none;
+}
+
+/* ── HUD CORNERS ── */
+.lp-hud {
+    position: absolute;
+    width: 40px; height: 40px;
+    opacity: 0;
+    animation: lp-hud-in 0.5s ease forwards;
+    animation-delay: 0.6s;
+}
+.lp-hud--tl { top: 20px; left: 20px; }
+.lp-hud--tr { top: 20px; right: 20px; transform: scaleX(-1); }
+.lp-hud--bl { bottom: 36px; left: 20px; transform: scaleY(-1); }
+.lp-hud--br { bottom: 36px; right: 20px; transform: scale(-1); }
+
+@keyframes lp-hud-in {
+    from { opacity: 0; } to { opacity: 1; }
+}
+
+.lp-hud-line {
+    position: absolute;
+    background: #e05a2088;
+}
+.lp-hud-line--h { top: 0; left: 0; width: 100%; height: 1.5px; }
+.lp-hud-line--v { top: 0; left: 0; width: 1.5px; height: 100%; }
+
+/* ── TELEMETRY BAR ── */
+.lp-telemetry {
+    position: absolute;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    color: #e05a2088;
+    text-transform: uppercase;
+    opacity: 0;
+    animation: lp-hud-in 0.5s ease forwards 0.7s;
+}
+
+.lp-tel-sep { color: #e05a2044; }
+.lp-tel-live { color: #ff6633; animation: lp-blink 1.2s ease-in-out infinite; }
+
+@keyframes lp-blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+}
+
+/* ── MAIN CONTENT ── */
+.lp-content {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0 24px;
+    gap: 0;
+}
+
+/* Each child staggers in */
+.lp-content > * {
+    opacity: 0;
+    transform: translateY(22px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+}
+
+.lp-content--visible .lp-eyebrow  { opacity: 1; transform: none; transition-delay: 0.1s; }
+.lp-content--visible .lp-title    { opacity: 1; transform: none; transition-delay: 0.25s; }
+.lp-content--visible .lp-subtitle { opacity: 1; transform: none; transition-delay: 0.45s; }
+.lp-content--visible .lp-btn      { opacity: 1; transform: none; transition-delay: 0.65s; }
+.lp-content--visible .lp-countdown { opacity: 1; transform: none; transition-delay: 0.85s; }
+
+/* ── EYEBROW ── */
+.lp-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.lp-eyebrow-line {
+    display: block;
+    width: 40px; height: 1px;
+    background: #e05a20aa;
+}
+
+.lp-eyebrow-text {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: #e05a20cc;
+    text-transform: uppercase;
+}
+
+/* ── TITLE ── */
+.lp-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(64px, 10vw, 128px);
+    line-height: 0.92;
+    letter-spacing: 3px;
+    color: #fff;
+    text-transform: uppercase;
+    margin: 0 0 22px;
+    text-shadow:
+        0 0 60px #c4601066,
+        0 2px 4px #00000088;
+    display: flex;
+    gap: 0.25em;
+    align-items: baseline;
+}
+
+.lp-title-word--1 {
+    color: #fff;
+}
+
+.lp-title-word--2 {
+    color: #ff7744;
+    text-shadow:
+        0 0 40px #ff440066,
+        0 0 80px #ff220033;
+}
+
+/* ── SUBTITLE ── */
+.lp-subtitle {
+    font-family: 'Barlow', sans-serif;
+    font-size: clamp(14px, 1.8vw, 18px);
+    font-weight: 300;
+    color: #e8c8a8cc;
+    line-height: 1.6;
+    letter-spacing: 0.5px;
+    margin-bottom: 36px;
+    max-width: 480px;
+}
+
+/* ── BUTTON ── */
+.lp-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 32px;
+    background: transparent;
+    border: 1.5px solid #e05a20;
+    border-radius: 2px;
+    color: #fff;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.25s, box-shadow 0.25s, transform 0.15s;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 28px;
+}
+
+.lp-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: #e05a20;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+    z-index: 0;
+}
+
+.lp-btn:hover::before { transform: scaleX(1); }
+.lp-btn:hover { box-shadow: 0 0 24px #e05a2055; transform: translateY(-1px); }
+.lp-btn:active { transform: translateY(1px); }
+
+.lp-btn-text, .lp-btn-arrow {
+    position: relative;
+    z-index: 1;
+}
+
+/* ── COUNTDOWN ── */
+.lp-countdown {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.lp-countdown-text {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: #e05a2066;
+    text-transform: uppercase;
+}
+
+.lp-countdown-bar {
+    width: 120px;
+    height: 2px;
+    background: #ffffff18;
+    border-radius: 1px;
+    overflow: hidden;
+}
+
+.lp-countdown-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(to right, #e05a20, #ff9944);
+    border-radius: 1px;
+}
+
+.lp-countdown-fill--run {
+    width: 100%;
+    transition: width 3s linear;
+}
+
+/* ── STATUS BAR ── */
+.lp-status-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+    background: #00000055;
+    border-top: 1px solid #e05a2022;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    color: #e05a2066;
+    text-transform: uppercase;
+    opacity: 0;
+    animation: lp-hud-in 0.5s ease forwards 1s;
+}
+.lp-api-status {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-top: 4px;
+    transition: color 0.4s ease;
+}
