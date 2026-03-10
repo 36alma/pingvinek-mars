@@ -15,6 +15,13 @@ export default function SimControls() {
     const genRoute = useStore((s) => s.generateRoute);
 
     const [timeVal, setTimeVal] = useState(totalTimeHours);
+    const [isPlanning, setIsPlanning] = useState(false);
+
+    const handleGenRoute = async () => {
+        setIsPlanning(true);
+        await genRoute();
+        setIsPlanning(false);
+    };
 
     return (
         <div className="widget controls-widget">
@@ -34,8 +41,8 @@ export default function SimControls() {
             </div>
 
             {route.length === 0 && (
-                <button className="btn btn-accent" onClick={genRoute} disabled={isRunning}>
-                    🗺️ Útvonal tervezés (A*)
+                <button className="btn btn-accent" onClick={handleGenRoute} disabled={isRunning || isPlanning}>
+                    {isPlanning ? '⏳ Tervezés...' : '🗺️ Útvonal tervezés (BFS)'}
                 </button>
             )}
 

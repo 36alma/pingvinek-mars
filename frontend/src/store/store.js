@@ -4,19 +4,18 @@
  * Manages: map, rover, simulation clock, battery, route, event log.
  */
 import { create } from 'zustand';
-import { generateMap, findMinerals, parseApiMap, CELL, MAP_SIZE } from '../simulation/mapData';
+import { generateMap, findMinerals, CELL, MAP_SIZE, parseApiMap } from '../simulation/mapData';
 import { planRoute } from '../simulation/pathfinding';
 
 // ── Constants ────────────────────────────────────────
-const CYCLE_TICKS = 48;
-const DAY_TICKS = 32;
-const K = 2;
-const SOLAR_CHARGE = 10;
-const STANDBY_DRAIN = 1;
-const MINE_DRAIN = 2;
-const TICK_INTERVAL_BASE = 400;
-
-const BACKEND_URL = 'http://localhost:5000';
+const BACKEND_URL = 'http://localhost:8000/api/v1';
+const CYCLE_TICKS = 48;   // 24 hours in ticks (1 tick = 30 min)
+const DAY_TICKS = 32;     // 16 hours
+const K = 2;              // energy constant
+const SOLAR_CHARGE = 10;  // energy gained per tick during day
+const STANDBY_DRAIN = 1;  // idle consumption per tick
+const MINE_DRAIN = 2;     // mining consumption per tick
+const TICK_INTERVAL_BASE = 400; // ms per tick at 1× speed
 
 // ── Helpers ──────────────────────────────────────────
 const isDaytime = (tick) => (tick % CYCLE_TICKS) < DAY_TICKS;
@@ -70,10 +69,6 @@ function createInitialState() {
         // Logs (each entry recorded every tick while running)
         logs: [],
         logHistory: [], // condensed for charts: {tick, battery, distance, minerals}
-
-        // API state
-        mapLoaded: false,
-        mapSource: 'local', // 'api' | 'local'
     };
 }
 
@@ -81,26 +76,31 @@ function createInitialState() {
 export const useStore = create((set, get) => ({
     ...createInitialState(),
 
-    // ── API map loader ──
+    // ── Data Loading ──
     loadMapFromApi: async () => {
         try {
-            const res = await fetch(`${BACKEND_URL}/map/`, {
-                signal: AbortSignal.timeout(8000),
-            });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            const { map, startX, startY } = parseApiMap(data);
+            const res = await fetch(`${BACKEND_URL}/map/`, { signal: AbortSignal.timeout(2000) });
+            if (!res.ok) throw new Error('Network response was not ok');
+            const apiData = await res.json();
+
+            // Validate API data structure (basic check)
+            if (!apiData.map || !apiData.rows || !apiData.cols) {
+                throw new Error('Invalid API map format');
+            }
+
+            const { map, startX, startY } = parseApiMap(apiData);
             const minerals = findMinerals(map);
-            set({
-                map, startX, startY, minerals,
-                roverX: startX, roverY: startY,
-                mapLoaded: true, mapSource: 'api',
-            });
-            return { ok: true, source: 'api' };
-        } catch (err) {
-            console.warn('[Map] API nem elérhető, helyi térkép használata:', err.message);
-            set({ mapLoaded: true, mapSource: 'local' });
-            return { ok: false, source: 'local' };
+
+            set({ map, startX, startY, roverX: startX, roverY: startY, minerals });
+            console.log('🗺️ Map loaded from API');
+            return { source: 'api' };
+
+        } catch (error) {
+            console.warn('⚠️ API map fetch failed, using local fallback:', error.message);
+            const { map, startX, startY } = generateMap();
+            const minerals = findMinerals(map);
+            set({ map, startX, startY, roverX: startX, roverY: startY, minerals });
+            return { source: 'fallback' };
         }
     },
 
@@ -122,11 +122,46 @@ export const useStore = create((set, get) => ({
     setTotalTime: (h) => set({ totalTimeHours: Math.max(24, h) }),
 
     // ── Route Generation ──
-    generateRoute: () => {
+    // Fetches a single segment route from backend BFS for two points
+    _fetchBackendPath: async (x1, y1, x2, y2) => {
+        try {
+            const res = await fetch(
+                `${BACKEND_URL}/rover/base_route`,
+                { signal: AbortSignal.timeout(5000) }
+            );
+            if (!res.ok) return null;
+            const data = await res.json();
+            if (!Array.isArray(data)) return null;
+            // Convert [[x,y],...] → [{x,y},...] 
+            return data.map(([x, y]) => ({ x, y }));
+        } catch {
+            return null;
+        }
+    },
+
+    generateRoute: async () => {
         const s = get();
+        get()._addLog('PLAN', '🔄 Útvonal tervezés folyamatban...');
+
+        // Try backend route first (test endpoint returns a random valid path)
+        const backendPath = await get()._fetchBackendPath();
+        if (backendPath && backendPath.length > 1) {
+            // Backend returned a valid path — use it as a demo/test route
+            // Convert to internal waypoint format with move actions
+            const route = backendPath.map((p, i) => ({
+                x: p.x,
+                y: p.y,
+                action: i === backendPath.length - 1 ? 'return' : 'move',
+            }));
+            set({ route, routeIdx: 0, plannedMinerals: [] });
+            get()._addLog('PLAN', `✅ Backend útvonal: ${route.length} lépés (BFS)`);
+            return;
+        }
+
+        // Fallback: local A* planner
         const { route, plannedMinerals } = planRoute(s.map, s.startX, s.startY, s.minerals, s.totalTimeHours);
         set({ route, routeIdx: 0, plannedMinerals });
-        get()._addLog('PLAN', `Útvonal megtervezve: ${route.length} lépés, ${plannedMinerals.length} ásvány célpont`);
+        get()._addLog('PLAN', `🗺️ Helyi A* útvonal: ${route.length} lépés, ${plannedMinerals.length} ásvány célpont`);
     },
 
     // ── Logging ──
@@ -283,10 +318,10 @@ export const useStore = create((set, get) => ({
     },
 
     // ── Simulation Controls ──
-    startSimulation: () => {
+    startSimulation: async () => {
         const s = get();
         if (s.isRunning || s.isFinished) return;
-        if (s.route.length === 0) get().generateRoute();
+        if (s.route.length === 0) await get().generateRoute();
 
         get()._addLog('START', `▶ Szimuláció indítva (${s.simSpeed}× sebesség)`);
         get()._addChartPoint(); // initial point
@@ -311,8 +346,6 @@ export const useStore = create((set, get) => ({
         const s = get();
         if (s._intervalId) clearInterval(s._intervalId);
         set(createInitialState());
-        // Reload map from API after reset
-        get().loadMapFromApi();
     },
 
     setSimSpeed: (speed) => {
