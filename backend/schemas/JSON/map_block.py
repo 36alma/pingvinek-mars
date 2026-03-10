@@ -1,0 +1,42 @@
+from enum import Enum
+from schemas.JSON import JsonBase
+
+class MapTypes(Enum):
+    AIR = "air"
+    WALL = "wall"
+    BLUE_ORE = "blue_ore"
+    YELLOW_ORE = "yellow_ore"
+    GREEN_ORE = "green_ore"
+    START = "start"
+
+class BaseMapBlock(JsonBase):
+    def __init__(self):
+        self.type:MapTypes
+
+class OreBaseMapBlock(BaseMapBlock):
+    def __init__(self):
+        self.type:MapTypes
+
+class AirMapBlock(BaseMapBlock):
+    def __init__(self):
+        self.type = MapTypes.AIR
+
+class WallMapBlock(BaseMapBlock):
+    def __init__(self):
+        self.type = MapTypes.WALL
+
+class BlueOreMapBlock(OreBaseMapBlock):
+    def __init__(self):
+        self.type = MapTypes.BLUE_ORE
+
+class YellowOreMapBlock(OreBaseMapBlock):
+    def __init__(self):
+        self.type = MapTypes.YELLOW_ORE
+
+class GreenOreMapBlock(OreBaseMapBlock):
+    def __init__(self):
+        self.type = MapTypes.GREEN_ORE
+
+class StartMapBlock(BaseMapBlock):
+    def __init__(self):
+        self.type = MapTypes.START
