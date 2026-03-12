@@ -34,10 +34,9 @@ class TopLayer():
                         ore_two_y=cors.y
                         ))
                 i.cluster_ores_distance = cluster_ores_distance
-                clusters_nears[i] = i.nearest_ore()
-                
-            
-            
+                self.clusters_nears = i.nearest_ore()
+                clusters_nears[i] = self.clusters_nears
 
-                
+            # TODO FIND A BEST NODES
+            
 
