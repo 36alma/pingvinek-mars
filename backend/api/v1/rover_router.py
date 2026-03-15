@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from fastapi import HTTPException
 from schemas.IN.rover import RoverMoveRequest
 from services.routing.rover import RoverService
 from services.algorithm.ore_distance import OreDistanceService
@@ -11,6 +12,54 @@ app = APIRouter(prefix="/rover", tags=["Rover"])
 class Rover_Router():
     def __init__(self):
         self._register_api_endpoint()
+
+    @staticmethod
+    def _manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+    def _validate_route_json(self, moves: list[dict]) -> None:
+        for move_idx, move in enumerate(moves):
+            path = move.get("path", [])
+            for edge_idx in range(len(path) - 1):
+                if self._manhattan(tuple(path[edge_idx]), tuple(path[edge_idx + 1])) > 1:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=(
+                            f"Teleport detected in move {move_idx} ({move.get('type')}) "
+                            f"at edge {edge_idx}: {path[edge_idx]} -> {path[edge_idx + 1]}"
+                        ),
+                    )
+        for move_idx in range(len(moves) - 1):
+            current_path = moves[move_idx].get("path", [])
+            next_path = moves[move_idx + 1].get("path", [])
+            if not current_path or not next_path:
+                continue
+            if self._manhattan(tuple(current_path[-1]), tuple(next_path[0])) > 1:
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        "Teleport detected between moves "
+                        f"{move_idx} ({moves[move_idx].get('type')}) and "
+                        f"{move_idx + 1} ({moves[move_idx + 1].get('type')}): "
+                        f"{current_path[-1]} -> {next_path[0]}"
+                    ),
+                )
+
+    @staticmethod
+    def _serialize_route(path: list) -> list[dict]:
+        output: list[dict] = []
+        for move in path:
+            move_dict = {
+                "type": getattr(move, "type", type(move).__name__),
+                "path": move.path,
+            }
+            speed_plan = getattr(move, "speedPlan", None)
+            if speed_plan is not None:
+                move_dict["speedPlan"] = [
+                    getattr(speed, "name", str(speed)) for speed in speed_plan
+                ]
+            output.append(move_dict)
+        return output
 
     def _register_api_endpoint(self):
         @app.post("/move")
@@ -37,4 +86,11 @@ class Rover_Router():
                     print(two_x)
                 break
             return OreDistanceService().get_ore_distance(ore_one_x=one_x,ore_one_y=one_y,ore_two_x=two_x,ore_two_y=two_y)
+
+        @app.get("/route")
+        def rover_route():
+            route = RoverService().startrouting()
+            route_json = self._serialize_route(route if route else [])
+            self._validate_route_json(route_json)
+            return route_json
 Rover_Router()
