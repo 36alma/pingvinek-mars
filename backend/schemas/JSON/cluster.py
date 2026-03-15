@@ -15,7 +15,7 @@ class Cluster():
         self.cluster_ores_distance: dict[Cors, int] = {}
         self.cluster_battery: int = self._minening_energy()
         self.clusters_nears: Optional[Cors] = None
-        self.cluster_path: ClusterMine = self._internal_distance_calc()
+        self.cluster_path: ClusterMine = self.internal_distance_calc()
         self.cluster_path_len: int = self._len_clustertostart()
         self.cluster_value: float = self.get_cluster_value()
         self.cluster_last_post = None
@@ -133,20 +133,25 @@ class Cluster():
     def _minening_energy(self) -> int:
         return self.rover.battery - self.ore_amount
 
-    def _internal_distance_calc(self) -> ClusterMine:
+    def internal_distance_calc(self, start_post: Optional[Cors] = None) -> ClusterMine:
         start_ore = self.clusters_nears
         route: list[Any] = []
         collected: list[Cors] = []
         clusterOres = dict(self.ores)
 
-        if start_ore is None:
-            self.set_clusters_nears()
-            start_ore = self.clusters_nears
+        if start_post is not None:
+            current: Cors = start_post
+            loop_target: Cors = start_post
+        else:
+            if start_ore is None:
+                self.set_clusters_nears()
+                start_ore = self.clusters_nears
 
-        if start_ore is None:
-            return ClusterMine(route=route,collected=collected) 
+            if start_ore is None:
+                return ClusterMine(route=route,collected=collected)
+            current = start_ore
+            loop_target = start_ore
 
-        current: Cors = start_ore
         while clusterOres:
             bestOre: Optional[Cors] = None
             bestPath: Optional[list[tuple[int, int]]] = None
@@ -180,8 +185,8 @@ class Cluster():
         backPath = OreDistanceService().get_ore_distance(
             ore_one_x=current.x,
             ore_one_y=current.y,
-            ore_two_x=start_ore.x,
-            ore_two_y=start_ore.y
+            ore_two_x=loop_target.x,
+            ore_two_y=loop_target.y
         )
         if backPath is not None:
             route.append(backPath)
@@ -220,9 +225,18 @@ class Cluster():
         if home is None:
             print("No home")
             return None
+            
+        start_x = self.rover.x
+        start_y = self.rover.y
+        
+        if hasattr(self, 'cluster_path') and self.cluster_path.collected:
+            last_ore = self.cluster_path.collected[-1]
+            start_x = last_ore.x
+            start_y = last_ore.y
+
         path = OreDistanceService().get_ore_distance(
-            ore_one_x=self.rover.x,
-            ore_one_y=self.rover.y,
+            ore_one_x=start_x,
+            ore_one_y=start_y,
             ore_two_x=home.x,
             ore_two_y=home.y
         )
