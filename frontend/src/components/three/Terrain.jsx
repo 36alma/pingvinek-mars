@@ -17,47 +17,59 @@ function hash(x, y) {
 useGLTF.preload('/szikla_akadaly.glb');
 useGLTF.preload('/szikla_akadaly_2.glb');
 
+// Single rock — hooks at component level, no loop violations
+function Rock({ p, rock1Scene, rock2Scene, scale1, scale2 }) {
+    const h1 = hash(p.x, p.y);
+    const h2 = hash(p.y, p.x);
+    const h3 = hash(p.x + 7, p.y + 13);
+    const useRock2 = h1 > 0.5;
+    const baseScale = useRock2 ? scale2 : scale1;
+    const varScale = baseScale * (0.75 + h2 * 0.5);
+    const rotY = h3 * Math.PI * 2;
+    const srcScene = useRock2 ? rock2Scene : rock1Scene;
+
+    // useMemo is now at component level — React rules satisfied
+    const cloned = useMemo(() => srcScene.clone(true), [srcScene]);
+
+    return (
+        <primitive
+            object={cloned}
+            position={[p.x * S, 0, p.y * S]}
+            scale={[varScale, varScale * (0.8 + h1 * 0.4), varScale]}
+            rotation={[0, rotY, 0]}
+            castShadow
+            receiveShadow
+        />
+    );
+}
+
+function getScaleFactor(scene) {
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z);
+    return maxDim > 0 ? 0.85 / maxDim : 1;
+}
+
 function RockInstances({ positions }) {
     const { scene: rock1Scene } = useGLTF('/szikla_akadaly.glb');
     const { scene: rock2Scene } = useGLTF('/szikla_akadaly_2.glb');
-
-    // Scale rock models to fit ~0.85 unit bounding box
-    const getScaleFactor = (scene) => {
-        const box = new THREE.Box3().setFromObject(scene);
-        const size = new THREE.Vector3();
-        box.getSize(size);
-        const maxDim = Math.max(size.x, size.y, size.z);
-        return maxDim > 0 ? 0.85 / maxDim : 1;
-    };
 
     const scale1 = useMemo(() => getScaleFactor(rock1Scene), [rock1Scene]);
     const scale2 = useMemo(() => getScaleFactor(rock2Scene), [rock2Scene]);
 
     return (
         <>
-            {positions.map((p, i) => {
-                const h1 = hash(p.x, p.y);
-                const h2 = hash(p.y, p.x);
-                const h3 = hash(p.x + 7, p.y + 13);
-                const useRock2 = h1 > 0.5;
-                const baseScale = useRock2 ? scale2 : scale1;
-                const varScale = baseScale * (0.75 + h2 * 0.5);
-                const rotY = h3 * Math.PI * 2;
-                const scene = useRock2 ? rock2Scene : rock1Scene;
-                const cloned = useMemo(() => scene.clone(true), [scene, p.x, p.y]);
-
-                return (
-                    <primitive
-                        key={`rock-${p.x}-${p.y}`}
-                        object={cloned}
-                        position={[p.x * S, 0, p.y * S]}
-                        scale={[varScale, varScale * (0.8 + h1 * 0.4), varScale]}
-                        rotation={[0, rotY, 0]}
-                        castShadow
-                        receiveShadow
-                    />
-                );
-            })}
+            {positions.map((p) => (
+                <Rock
+                    key={`rock-${p.x}-${p.y}`}
+                    p={p}
+                    rock1Scene={rock1Scene}
+                    rock2Scene={rock2Scene}
+                    scale1={scale1}
+                    scale2={scale2}
+                />
+            ))}
         </>
     );
 }

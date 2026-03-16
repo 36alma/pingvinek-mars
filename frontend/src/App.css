@@ -983,3 +983,24 @@
     font: 700 11px/1 var(--font-d);
     color: var(--tx-1);
 }
+/* ── Route Source Badge ────────────────────────────── */
+.route-source-badge {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 7px 10px;
+    border: 1px solid;
+    border-radius: 7px;
+    background: rgba(255,255,255,0.03);
+    margin-bottom: 4px;
+}
+
+.route-source-badge span:first-child {
+    font: 700 11px/1 var(--font-d);
+    letter-spacing: 0.05em;
+}
+
+.route-source-info {
+    font-size: 10px;
+    color: var(--tx-3) !important;
+}

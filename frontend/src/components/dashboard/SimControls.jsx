@@ -2,16 +2,17 @@ import { useState } from 'react';
 import { useStore } from '../../store/store';
 
 export default function SimControls() {
-    const isRunning = useStore((s) => s.isRunning);
-    const isFinished = useStore((s) => s.isFinished);
-    const simSpeed = useStore((s) => s.simSpeed);
+    const isRunning   = useStore((s) => s.isRunning);
+    const isFinished  = useStore((s) => s.isFinished);
+    const simSpeed    = useStore((s) => s.simSpeed);
     const totalTimeHours = useStore((s) => s.totalTimeHours);
-    const route = useStore((s) => s.route);
-    const start = useStore((s) => s.startSimulation);
-    const pause = useStore((s) => s.pauseSimulation);
-    const reset = useStore((s) => s.resetSimulation);
+    const route       = useStore((s) => s.route);
+    const routeSource = useStore((s) => s.routeSource);
+    const start  = useStore((s) => s.startSimulation);
+    const pause  = useStore((s) => s.pauseSimulation);
+    const reset  = useStore((s) => s.resetSimulation);
     const setSpeed = useStore((s) => s.setSimSpeed);
-    const setTime = useStore((s) => s.setTotalTime);
+    const setTime  = useStore((s) => s.setTotalTime);
     const genRoute = useStore((s) => s.generateRoute);
 
     const [timeVal, setTimeVal] = useState(totalTimeHours);
@@ -22,6 +23,16 @@ export default function SimControls() {
         await genRoute();
         setIsPlanning(false);
     };
+
+    // Route source badge
+    const sourceBadge = routeSource === 'backend'
+        ? { label: '☁️ Backend (Go/Mining)', color: '#39ff14' }
+        : routeSource === 'local'
+        ? { label: '💻 Helyi A*', color: '#ffc107' }
+        : null;
+
+    // Mining steps count for info
+    const mineCount = route.filter(w => w.action === 'mine').length;
 
     return (
         <div className="widget controls-widget">
@@ -40,10 +51,23 @@ export default function SimControls() {
                 />
             </div>
 
-            {route.length === 0 && (
-                <button className="btn btn-accent" onClick={handleGenRoute} disabled={isRunning || isPlanning}>
-                    {isPlanning ? '⏳ Tervezés...' : '🗺️ Útvonal tervezés (BFS)'}
+            {route.length === 0 ? (
+                <button
+                    className="btn btn-accent"
+                    onClick={handleGenRoute}
+                    disabled={isRunning || isPlanning}
+                >
+                    {isPlanning ? '⏳ Backend tervezés...' : '🗺️ Útvonal tervezés'}
                 </button>
+            ) : (
+                sourceBadge && (
+                    <div className="route-source-badge" style={{ borderColor: sourceBadge.color }}>
+                        <span style={{ color: sourceBadge.color }}>{sourceBadge.label}</span>
+                        <span className="route-source-info">
+                            {route.length} lépés · {mineCount} bányászat
+                        </span>
+                    </div>
+                )
             )}
 
             <div className="ctrl-buttons">
