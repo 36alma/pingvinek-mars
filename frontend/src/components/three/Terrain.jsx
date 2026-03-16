@@ -1,34 +1,83 @@
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, Suspense } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { useGLTF } from '@react-three/drei';
 import { useStore } from '../../store/store';
 import { CELL, MAP_SIZE } from '../../simulation/mapData';
 import * as THREE from 'three';
 
-const S = 1; // cell size
+const S = 1;
 
-// Simple hash for deterministic per-obstacle variation
 function hash(x, y) {
     let h = (x * 374761393 + y * 668265263) | 0;
     h = ((h ^ (h >> 13)) * 1274126177) | 0;
     return ((h ^ (h >> 16)) >>> 0) / 4294967296;
 }
 
-// Instanced obstacle rendering for performance
-function Obstacles({ positions }) {
+// Preload both rock models
+useGLTF.preload('/szikla_akadaly.glb');
+useGLTF.preload('/szikla_akadaly_2.glb');
+
+function RockInstances({ positions }) {
+    const { scene: rock1Scene } = useGLTF('/szikla_akadaly.glb');
+    const { scene: rock2Scene } = useGLTF('/szikla_akadaly_2.glb');
+
+    // Scale rock models to fit ~0.85 unit bounding box
+    const getScaleFactor = (scene) => {
+        const box = new THREE.Box3().setFromObject(scene);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        return maxDim > 0 ? 0.85 / maxDim : 1;
+    };
+
+    const scale1 = useMemo(() => getScaleFactor(rock1Scene), [rock1Scene]);
+    const scale2 = useMemo(() => getScaleFactor(rock2Scene), [rock2Scene]);
+
+    return (
+        <>
+            {positions.map((p, i) => {
+                const h1 = hash(p.x, p.y);
+                const h2 = hash(p.y, p.x);
+                const h3 = hash(p.x + 7, p.y + 13);
+                const useRock2 = h1 > 0.5;
+                const baseScale = useRock2 ? scale2 : scale1;
+                const varScale = baseScale * (0.75 + h2 * 0.5);
+                const rotY = h3 * Math.PI * 2;
+                const scene = useRock2 ? rock2Scene : rock1Scene;
+                const cloned = useMemo(() => scene.clone(true), [scene, p.x, p.y]);
+
+                return (
+                    <primitive
+                        key={`rock-${p.x}-${p.y}`}
+                        object={cloned}
+                        position={[p.x * S, 0, p.y * S]}
+                        scale={[varScale, varScale * (0.8 + h1 * 0.4), varScale]}
+                        rotation={[0, rotY, 0]}
+                        castShadow
+                        receiveShadow
+                    />
+                );
+            })}
+        </>
+    );
+}
+
+function FallbackObstacles({ positions }) {
     const ref = useRef();
     const count = positions.length;
     const dummy = useMemo(() => new THREE.Object3D(), []);
     const initialized = useRef(false);
+    const lastCount = useRef(-1);
 
     useFrame(() => {
-        if (!ref.current || count === 0 || initialized.current) return;
+        if (!ref.current || count === 0) return;
+        if (initialized.current && lastCount.current === count) return;
         positions.forEach((p, i) => {
             const h1 = hash(p.x, p.y);
             const h2 = hash(p.y, p.x);
             const h3 = hash(p.x + 100, p.y + 100);
             const scaleY = 0.35 + h1 * 0.55;
-            const actualHeight = 0.5 * scaleY; // geometry height 0.5 * scaleY
-            dummy.position.set(p.x * S, actualHeight / 2, p.y * S);
+            dummy.position.set(p.x * S, (0.5 * scaleY) / 2, p.y * S);
             dummy.scale.set(0.65 + h2 * 0.35, scaleY, 0.65 + h3 * 0.35);
             dummy.rotation.set(0, h2 * Math.PI, 0);
             dummy.updateMatrix();
@@ -36,12 +85,12 @@ function Obstacles({ positions }) {
         });
         ref.current.instanceMatrix.needsUpdate = true;
         initialized.current = true;
+        lastCount.current = count;
     });
 
     if (count === 0) return null;
-
     return (
-        <instancedMesh ref={ref} args={[null, null, count]} castShadow receiveShadow>
+        <instancedMesh key={count} ref={ref} args={[null, null, count]} castShadow receiveShadow>
             <boxGeometry args={[S * 0.85, 0.5, S * 0.85]} />
             <meshStandardMaterial color="#7a7a7a" emissive="#333333" emissiveIntensity={0.5} roughness={0.95} metalness={0.05} />
         </instancedMesh>
@@ -82,19 +131,19 @@ function MineralInstances({ minerals }) {
     return (
         <>
             {grouped.b.length > 0 && (
-                <instancedMesh ref={blueRef} args={[null, null, grouped.b.length]}>
+                <instancedMesh key={`b-${grouped.b.length}`} ref={blueRef} args={[null, null, grouped.b.length]}>
                     <octahedronGeometry args={[0.18, 0]} />
                     <meshStandardMaterial color="#00cfff" emissive="#00cfff" emissiveIntensity={0.6} transparent opacity={0.9} roughness={0.15} metalness={0.4} />
                 </instancedMesh>
             )}
             {grouped.y.length > 0 && (
-                <instancedMesh ref={yellowRef} args={[null, null, grouped.y.length]}>
+                <instancedMesh key={`y-${grouped.y.length}`} ref={yellowRef} args={[null, null, grouped.y.length]}>
                     <octahedronGeometry args={[0.18, 0]} />
                     <meshStandardMaterial color="#ffcc00" emissive="#ffcc00" emissiveIntensity={0.6} transparent opacity={0.9} roughness={0.15} metalness={0.4} />
                 </instancedMesh>
             )}
             {grouped.g.length > 0 && (
-                <instancedMesh ref={greenRef} args={[null, null, grouped.g.length]}>
+                <instancedMesh key={`g-${grouped.g.length}`} ref={greenRef} args={[null, null, grouped.g.length]}>
                     <octahedronGeometry args={[0.18, 0]} />
                     <meshStandardMaterial color="#00ff66" emissive="#00ff66" emissiveIntensity={0.6} transparent opacity={0.9} roughness={0.15} metalness={0.4} />
                 </instancedMesh>
@@ -163,8 +212,10 @@ export default function Terrain() {
             {/* Grid */}
             <gridHelper args={[MAP_SIZE, MAP_SIZE, '#6b2f12', '#6b2f12']} position={[MAP_SIZE / 2 - 0.5, -0.03, MAP_SIZE / 2 - 0.5]} />
 
-            {/* Obstacles (instanced) */}
-            <Obstacles positions={obstacles} />
+            {/* Obstacles — GLB rock models */}
+            <Suspense fallback={<FallbackObstacles positions={obstacles} />}>
+                <RockInstances positions={obstacles} />
+            </Suspense>
 
             {/* Minerals (instanced) */}
             <MineralInstances minerals={visibleMinerals} />
