@@ -95,6 +95,16 @@ class BatteryRouteGuardTests(unittest.TestCase):
         self.assertEqual(go_moves[1].path, [(1, 0), (2, 0)])
         self.assertEqual(len(mining_moves), 2)
 
+    def test_add_path_skips_single_point_go_move(self) -> None:
+        rover = self._make_rover(battery=100)
+        top_layer = TopLayer(rover=rover)
+        top_layer.full_path = []
+
+        top_layer.add_path([(5, 5)])
+
+        self.assertEqual(top_layer.full_path, [])
+        self.assertEqual((rover.x, rover.y), (5, 5))
+
     def test_router_keeps_continuous_path_and_adds_timeline_path(self) -> None:
         move = GoMove(
             path=[(0, 0), (0, 1), (0, 2), (0, 3), (1, 3), (2, 3)],
