@@ -30,6 +30,9 @@ class MapService:
             return
         self._initialized = True
         self._csv_path = CSV_PATH
+        self.reset_map()
+
+    def reset_map(self) -> None:
         self._coord_map, self._rows, self._cols = self._load_csv()
         self.cors_map = self.get_full_map_OBJ()
     def _load_csv(self) -> Tuple[Dict[str, str], int, int]:
