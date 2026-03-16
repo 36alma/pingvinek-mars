@@ -27,7 +27,7 @@ if sys.platform == 'win32':
 
 # ── Portok ───────────────────────────────────────────
 BACKEND_PORT  = 5000
-FRONTEND_PORT = 4173
+FRONTEND_PORT = 5173
 
 # ── Utvonalak ────────────────────────────────────────
 if getattr(sys, 'frozen', False):
