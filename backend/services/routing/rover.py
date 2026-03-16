@@ -11,6 +11,7 @@ from services.map.map import MapService
 from services.algorithm.top_layer import TopLayer
 class RoverService():
     def __init__(self):
+        MapService().reset_map()
         self.rover = Rover()
         self.rover.battery = 100
         self.rover.inv = {}
