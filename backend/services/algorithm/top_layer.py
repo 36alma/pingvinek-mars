@@ -8,9 +8,18 @@ from services.algorithm.find_clusters import Find_Clusters
 from services.algorithm.ore_distance import OreDistanceService
 from schemas.JSON.move import BasePathMoveType,GoMove,MiningMove
 class TopLayer():
-    def __init__(self,*,rover:Rover):
+    def __init__(
+        self,
+        *,
+        rover:Rover,
+        excluded_cluster_signatures: set[tuple[tuple[int, int], ...]] | None = None,
+    ):
         self.map_service = MapService()
         self.rover = rover
+        self.initial_rover = self._clone_rover(rover)
+        self.excluded_cluster_signatures = excluded_cluster_signatures or set()
+        self.selected_cluster_signatures: list[tuple[tuple[int, int], ...]] = []
+        self.last_route_valid = True
 
     @staticmethod
     def _manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
@@ -59,6 +68,10 @@ class TopLayer():
         target.day = source.day
         target.time = source.time
 
+    @staticmethod
+    def _cluster_signature(cluster: Cluster) -> tuple[tuple[int, int], ...]:
+        return tuple(sorted((cors.x, cors.y) for cors in cluster.ores))
+
     def _is_unmined_ore(
         self,
         step: tuple[int, int],
@@ -73,6 +86,40 @@ class TopLayer():
     def _advance_rover_state(rover: Rover) -> None:
         rover.charge()
         rover.add_time()
+
+    @staticmethod
+    def _solar_gain_for_step(rover: Rover) -> int:
+        return 10 if rover.IsDay() else 0
+
+    def _score_speed_option(
+        self,
+        *,
+        rover_before_move: Rover,
+        rover_after_move: Rover,
+        move_type: MoveType,
+        need_to_finish: int,
+        final_required_reserve: int,
+    ) -> float:
+        net_cost = max(
+            0,
+            rover_before_move.move_energy_calc(move_type) - self._solar_gain_for_step(rover_before_move),
+        )
+        battery_buffer = rover_after_move.battery - (need_to_finish + final_required_reserve)
+        if rover_before_move.IsDay():
+            score = (
+                5.0 * move_type.value
+                - 1.0 * net_cost
+                + 0.3 * min(battery_buffer, 40)
+            )
+            if net_cost == 0:
+                score += 4.0
+            return score
+
+        return (
+            2.0 * move_type.value
+            - 2.5 * net_cost
+            + 0.2 * min(battery_buffer, 40)
+        )
 
     def _simulate_move(self, rover: Rover, move_type: MoveType) -> bool:
         cost = rover.move_energy_calc(move_type)
@@ -141,6 +188,7 @@ class TopLayer():
             remaining_steps = (len(path) - 1) - i
             chosen_speed: MoveType | None = None
             chosen_rover_state: Rover | None = None
+            best_score = float("-inf")
 
             for move_type in speed_type:
                 if move_type.value > remaining_steps:
@@ -157,9 +205,17 @@ class TopLayer():
                 need_to_finish = candidate_rover.MinNeedForRemainingPath(path, next_index)
                 safety_margin = final_required_reserve
                 if candidate_rover.battery >= need_to_finish + safety_margin:
-                    chosen_speed = move_type
-                    chosen_rover_state = candidate_rover
-                    break
+                    score = self._score_speed_option(
+                        rover_before_move=rover,
+                        rover_after_move=candidate_rover,
+                        move_type=move_type,
+                        need_to_finish=need_to_finish,
+                        final_required_reserve=final_required_reserve,
+                    )
+                    if score > best_score:
+                        best_score = score
+                        chosen_speed = move_type
+                        chosen_rover_state = candidate_rover
 
             if chosen_speed is None or chosen_rover_state is None:
                 return None
@@ -188,13 +244,13 @@ class TopLayer():
                 if self._build_speed_plan(
                     current_segment,
                     rover,
-                    require_home_reachability=True,
+                    require_home_reachability=False,
                 ) is None:
                     break
                 mine_step = current_segment[-1]
                 rover.x, rover.y = mine_step
                 if self._is_unmined_ore(mine_step, mined_positions):
-                    if not self._simulate_mining(rover, require_home_reachability=True):
+                    if not self._simulate_mining(rover, require_home_reachability=False):
                         break
                     mined_positions.add(mine_step)
                     mined_count += 1
@@ -212,7 +268,7 @@ class TopLayer():
             if self._build_speed_plan(
                 current_segment,
                 rover,
-                require_home_reachability=True,
+                require_home_reachability=False,
             ) is None:
                 return mined_count
         elif len(current_segment) == 1:
@@ -230,7 +286,7 @@ class TopLayer():
         if self._build_speed_plan(
             approach_path,
             sim_rover,
-            require_home_reachability=True,
+            require_home_reachability=False,
         ) is None:
             return False
 
@@ -289,6 +345,8 @@ class TopLayer():
                     continue
                 if cluster[0] in self.visited:
                     continue
+                if self._cluster_signature(cluster[0]) in self.excluded_cluster_signatures:
+                    continue
                 rover_x: int = self.rover.x
                 rover_y: int = self.rover.y
                 path = OreDistanceService().get_ore_distance(
@@ -298,13 +356,17 @@ class TopLayer():
                     ore_two_y=cluster[0].clusters_nears.y
                 )
                 if path is not None and self._can_execute_cluster_plan(cluster[0], path):
-                    self.add_path(path)
+                    self.add_path(path, require_home_reachability=False)
                     self._refresh_cluster_ores(cluster[0])
                     cluster[0].cluster_last_post = None
                     cluster[0].cluster_path = cluster[0].internal_distance_calc(
                         start_post=Cors(x=self.rover.x, y=self.rover.y)
                     )
                     mined_count = self.add_mine_path(cluster[0].cluster_path.route)
+                    if mined_count > 0:
+                        self.selected_cluster_signatures.append(
+                            self._cluster_signature(cluster[0])
+                        )
                     self._refresh_cluster_ores(cluster[0])
                     if len(cluster[0].ores) == 0:
                         self.visited.append(cluster[0])
@@ -330,7 +392,9 @@ class TopLayer():
                     final_required_reserve=0,
                 ) is not None:
                     self.add_path(back_path, require_home_reachability=False, final_required_reserve=0)
-                
+        self.last_route_valid = self._validate_final_route()
+        if not self.last_route_valid:
+            return []
         return self.full_path
         
             
@@ -338,6 +402,8 @@ class TopLayer():
         clusters_nears:dict[Cluster,float] = {}
         for i in clusters:
             if i in self.visited:
+                continue
+            if self._cluster_signature(i) in self.excluded_cluster_signatures:
                 continue
             self._refresh_cluster_ores(i)
             if len(i.ores) == 0:
@@ -405,7 +471,7 @@ class TopLayer():
         self,
         path:list[tuple[int, int]],
         *,
-        require_home_reachability: bool = True,
+        require_home_reachability: bool = False,
         final_required_reserve: int = MIN_BATTERY_RESERVE,
     ):
         if not path:
@@ -454,18 +520,18 @@ class TopLayer():
                 path_preview_result = self._build_speed_plan(
                     current_segment,
                     path_preview,
-                    require_home_reachability=True,
+                    require_home_reachability=False,
                 )
                 if path_preview_result is None:
                     break
-                self.add_path(current_segment)
+                self.add_path(current_segment, require_home_reachability=False)
                 mine_x, mine_y = current_segment[-1]
                 step_ore_type = MapService().get_map_block_type(x=mine_x, y=mine_y)
                 if isinstance(step_ore_type, OreBaseMapBlock):
                     mine_preview = self._clone_rover(self.rover)
                     if not self._simulate_mining(
                         mine_preview,
-                        require_home_reachability=True,
+                        require_home_reachability=False,
                     ):
                         break
                     self.rover.mining(
@@ -489,9 +555,43 @@ class TopLayer():
             if self._build_speed_plan(
                 current_segment,
                 path_preview,
-                require_home_reachability=True,
+                require_home_reachability=False,
             ) is not None:
-                self.add_path(current_segment)
+                self.add_path(current_segment, require_home_reachability=False)
         elif len(current_segment) == 1:
             self.rover.x, self.rover.y = current_segment[0]
         return mined_count
+
+    def _validate_final_route(self) -> bool:
+        sim_rover = self._clone_rover(self.initial_rover)
+        min_battery = sim_rover.battery
+
+        for move in self.full_path:
+            move_type = getattr(move, "type", None)
+            if move_type == "Go":
+                speed_plan = getattr(move, "speedPlan", [])
+                for speed in speed_plan:
+                    if not self._simulate_move(sim_rover, speed):
+                        return False
+                    min_battery = min(min_battery, sim_rover.battery)
+                if move.path:
+                    sim_rover.x, sim_rover.y = move.path[-1]
+            elif move_type == "Mining":
+                mine_events = 0
+                if len(move.path) >= 2:
+                    for idx in range(1, len(move.path)):
+                        if move.path[idx] == move.path[idx - 1]:
+                            mine_events += 1
+                if mine_events == 0 and move.path:
+                    mine_events = 1
+                for _ in range(mine_events):
+                    if not self._simulate_mining(sim_rover, require_home_reachability=False):
+                        return False
+                    min_battery = min(min_battery, sim_rover.battery)
+                if move.path:
+                    sim_rover.x, sim_rover.y = move.path[-1]
+
+        home = self.map_service.where_is_start()
+        if home is not None and (sim_rover.x != home.x or sim_rover.y != home.y):
+            return False
+        return min_battery >= MIN_BATTERY_RESERVE
