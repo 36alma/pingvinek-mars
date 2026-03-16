@@ -150,6 +150,27 @@ class BatteryRouteGuardTests(unittest.TestCase):
             [(0, 0), (0, 3), (2, 3)],
         )
 
+    def test_router_builds_execution_timeline_without_zero_battery(self) -> None:
+        moves = [
+            {
+                "type": "Go",
+                "path": [(0, 0), (0, 1), (0, 2)],
+                "timelinePath": [(0, 0), (0, 2)],
+                "speedPlan": ["NORMAL"],
+            },
+            {
+                "type": "Mining",
+                "path": [(0, 2), (0, 2)],
+            },
+        ]
+
+        timeline = Rover_Router._build_execution_timeline(moves, (0, 0))
+
+        self.assertEqual(len(timeline), 2)
+        self.assertTrue(all(step["battery"] > 0 for step in timeline))
+        self.assertEqual(timeline[0]["position"], [0, 2])
+        self.assertEqual(timeline[1]["type"], "Mining")
+
 
 if __name__ == "__main__":
     unittest.main()
