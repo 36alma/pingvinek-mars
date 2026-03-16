@@ -1,5 +1,5 @@
 from services.map.map import MapService
-from schemas.JSON.rover import Rover
+from schemas.JSON.rover import Rover, MIN_BATTERY_RESERVE
 from schemas.JSON import Cors
 from schemas.JSON.map_block import OreBaseMapBlock
 from typing import Any, Dict, Optional
@@ -91,11 +91,11 @@ class Cluster():
         battery_end = self.rover.battery - total_net_energy
 
         # --- Risk penalty ---
-        safety_margin = 15
+        safety_margin = max(15, MIN_BATTERY_RESERVE)
         risk_penalty = 0
 
-        if battery_end < 0:
-            risk_penalty += 100000
+        if battery_end < MIN_BATTERY_RESERVE:
+            return float("-inf")
         elif battery_end < safety_margin:
             risk_penalty += 5000
 

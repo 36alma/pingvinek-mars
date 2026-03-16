@@ -8,6 +8,7 @@ from typing import Any, Callable
 from typing import Any, Callable, TypeVar, cast
 
 F = TypeVar('F', bound=Callable[..., Any])
+MIN_BATTERY_RESERVE = 10
 
 def Time(func: F) -> F:
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
@@ -77,18 +78,20 @@ class Rover(JsonBase):
 
     def MinNeedForRemainingPath(self,path:list[tuple[int,int]],index:int):
         need_energy = 0
+        sim_time = self.time
+        sim_day = self.day
         while index < (len(path) -1) :
             step_cost:int
-            if self.time >= 0 and self.time < 16:
+            if sim_time >= 0 and sim_time < 16:
                 step_cost = 1
             else:
                 step_cost = 2
             need_energy += step_cost
             index += 1
-            self.time += 0.5
-            if self.time == 24:
-                self.time = 0
-                self.day += 1
+            sim_time += 0.5
+            if sim_time >= 24:
+                sim_time = 0
+                sim_day += 1
         return need_energy
     @Time
     def stand(self):
