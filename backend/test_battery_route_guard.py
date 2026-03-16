@@ -105,6 +105,34 @@ class BatteryRouteGuardTests(unittest.TestCase):
         self.assertEqual(top_layer.full_path, [])
         self.assertEqual((rover.x, rover.y), (5, 5))
 
+    def test_speed_plan_prefers_normal_in_daylight_for_short_safe_segment(self) -> None:
+        rover = self._make_rover(battery=20)
+        rover.time = 10
+        top_layer = TopLayer(rover=rover)
+
+        speed_plan = top_layer._build_speed_plan(
+            [(0, 0), (1, 0), (2, 0)],
+            top_layer._clone_rover(rover),
+            require_home_reachability=False,
+            final_required_reserve=10,
+        )
+
+        self.assertEqual(speed_plan, [MoveType.NORMAL])
+
+    def test_speed_plan_prefers_slow_at_night_for_short_segment(self) -> None:
+        rover = self._make_rover(battery=20)
+        rover.time = 20
+        top_layer = TopLayer(rover=rover)
+
+        speed_plan = top_layer._build_speed_plan(
+            [(0, 0), (1, 0), (2, 0)],
+            top_layer._clone_rover(rover),
+            require_home_reachability=False,
+            final_required_reserve=10,
+        )
+
+        self.assertEqual(speed_plan, [MoveType.SLOW, MoveType.SLOW])
+
     def test_router_keeps_continuous_path_and_adds_timeline_path(self) -> None:
         move = GoMove(
             path=[(0, 0), (0, 1), (0, 2), (0, 3), (1, 3), (2, 3)],
