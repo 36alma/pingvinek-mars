@@ -1,4 +1,4 @@
-from schemas.JSON.map_block import AirMapBlock, WallMapBlock
+from schemas.JSON.map_block import WallMapBlock
 from services.map.map import MapService
 from schemas.JSON.cors import Cors
 class OreDistanceService():
