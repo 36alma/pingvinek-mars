@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from fastapi import HTTPException
 from schemas.IN.rover import RoverMoveRequest
+from schemas.JSON.move import speed_to_steps
 from services.routing.rover import RoverService
 from services.algorithm.ore_distance import OreDistanceService
 from schemas.JSON.map_block import WallMapBlock
@@ -46,15 +47,28 @@ class Rover_Router():
                 )
 
     @staticmethod
+    def _timeline_path(path: list[tuple[int, int]], speed_plan: list) -> list[tuple[int, int]]:
+        if not path:
+            return []
+        timeline = [path[0]]
+        edge_index = 0
+        for speed in speed_plan:
+            edge_index += speed_to_steps(speed)
+            timeline.append(path[edge_index])
+        return timeline
+
+    @staticmethod
     def _serialize_route(path: list) -> list[dict]:
         output: list[dict] = []
         for move in path:
+            speed_plan = getattr(move, "speedPlan", None)
+            raw_path = move.path
             move_dict = {
                 "type": getattr(move, "type", type(move).__name__),
-                "path": move.path,
+                "path": raw_path,
             }
-            speed_plan = getattr(move, "speedPlan", None)
             if speed_plan is not None:
+                move_dict["timelinePath"] = Rover_Router._timeline_path(raw_path, speed_plan)
                 move_dict["speedPlan"] = [
                     getattr(speed, "name", str(speed)) for speed in speed_plan
                 ]
@@ -89,8 +103,13 @@ class Rover_Router():
 
         @app.get("/route")
         def rover_route():
-            route = RoverService().startrouting()
+            rover_service = RoverService()
+            route = rover_service.startrouting()
             route_json = self._serialize_route(route if route else [])
             self._validate_route_json(route_json)
-            return route_json
+            return {
+                "route": route_json,
+                "battery": rover_service.rover.battery,
+                "time": rover_service.rover.time,
+            }
 Rover_Router()
