@@ -24,13 +24,13 @@ function fitScene(scene, targetSize = 0.9) {
 }
 
 // Mesh names that are part of the robotic arm — hide them
-const ARM_MESH_NAMES = new Set(['rover2.001', 'rover2.002', 'rover2.003']);
+// The arm assembly is parented to 'Csontváz' — hiding that node
+// removes the arm meshes AND stops the bone animation entirely
+const ARM_ROOT_NAME = 'Csontváz';
 
 function hideArmMeshes(scene) {
     scene.traverse((obj) => {
-        if (obj.isMesh && ARM_MESH_NAMES.has(obj.name)) {
-            obj.visible = false;
-        }
+        if (obj.name === ARM_ROOT_NAME) obj.visible = false;
     });
 }
 

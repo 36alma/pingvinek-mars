@@ -10,7 +10,9 @@ useGLTF.preload('/rover_mozog.glb');
 useGLTF.preload('/rover_allo.glb');
 useGLTF.preload('/rover_fur.glb');
 
-const ARM_MESH_NAMES = new Set(['rover2.001', 'rover2.002', 'rover2.003']);
+// The arm assembly is parented to 'Csontváz' — hiding that node
+// removes the arm meshes AND stops the bone animation entirely
+const ARM_ROOT_NAME = 'Csontváz';
 
 function fitScene(scene, target = 1.6) {
     const box = new THREE.Box3().setFromObject(scene);
@@ -30,7 +32,7 @@ function PreviewModel({ path }) {
     const { cloned, scale, offset } = useMemo(() => {
         const c = scene.clone(true);
         c.traverse((obj) => {
-            if (obj.isMesh && ARM_MESH_NAMES.has(obj.name)) obj.visible = false;
+            if (obj.name === ARM_ROOT_NAME) obj.visible = false;
         });
         const { scale, offset } = fitScene(c);
         return { cloned: c, scale, offset };

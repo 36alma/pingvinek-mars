@@ -116,47 +116,63 @@ function Obstacles({ positions }) {
     );
 }
 
-// ── Mineral: single GLB instance ─────────────────────
-function MineralItem({ m, scene, scaleFactor }) {
+// Pre-computed from GLB accessor bounds (maxDim target=0.4 world units)
+// jeg:   maxDim=17.46 → scale=0.4/17.46, center=(10.07, 0,   10.27)
+// arany: maxDim=17.04 → scale=0.4/17.04, center=(7.92,  3.44, 9.13)
+// zold:  maxDim=20.00 → scale=0.4/20.00, center=(-10,   5.5, -9.87)
+const MINERAL_CONFIG = {
+    jeg:   { scale: 0.4/17.46, ox: -10.07*(0.4/17.46), oy: 0,                    oz: -10.27*(0.4/17.46) },
+    arany: { scale: 0.4/17.04, ox:  -7.92*(0.4/17.04), oy: -3.44*(0.4/17.04),    oz:  -9.13*(0.4/17.04) },
+    zold:  { scale: 0.4/20.00, ox:  10.00*(0.4/20.00), oy: 0,                    oz:   9.87*(0.4/20.00) },
+};
+
+function MineralItem({ m, scene, cfg }) {
     const groupRef = useRef();
-    const cloned = useMemo(() => scene.clone(true), [scene]);
+    const cloned = useMemo(() => {
+        const c = scene.clone(true);
+        c.traverse((obj) => {
+            if (obj.isMesh && obj.material) {
+                obj.material = Array.isArray(obj.material)
+                    ? obj.material.map(mat => mat.clone())
+                    : obj.material.clone();
+            }
+        });
+        return c;
+    }, [scene, m.x, m.y]);
 
     useFrame((state) => {
         if (!groupRef.current) return;
-        groupRef.current.position.y = 0.25 + Math.sin(state.clock.elapsedTime * 2 + m.x * 0.5 + m.y * 0.3) * 0.06;
+        groupRef.current.position.y = 0.18 + Math.sin(state.clock.elapsedTime * 2 + m.x * 0.5 + m.y * 0.3) * 0.06;
         groupRef.current.rotation.y = state.clock.elapsedTime * 1.2;
     });
 
     return (
-        <group ref={groupRef} position={[m.x * S, 0.25, m.y * S]}>
+        <group ref={groupRef} position={[m.x * S, 0.18, m.y * S]}>
             <primitive
                 object={cloned}
-                scale={[scaleFactor, scaleFactor, scaleFactor]}
+                scale={[cfg.scale, cfg.scale, cfg.scale]}
+                position={[cfg.ox, cfg.oy, cfg.oz]}
             />
         </group>
     );
 }
 
 function Minerals({ minerals }) {
-    const { scene: iceScene }    = useGLTF('/jeg_asvany.glb');
-    const { scene: goldScene }   = useGLTF('/arany_asvany.glb');
-    const { scene: greenScene }  = useGLTF('/zold_asvany.glb');
-
-    const iceScale  = useMemo(() => getScaleFactor(iceScene,  0.35), [iceScene]);
-    const goldScale = useMemo(() => getScaleFactor(goldScene, 0.35), [goldScene]);
-    const greenScale = useMemo(() => getScaleFactor(greenScene, 0.35), [greenScene]);
+    const { scene: iceScene }   = useGLTF('/jeg_asvany.glb');
+    const { scene: goldScene }  = useGLTF('/arany_asvany.glb');
+    const { scene: greenScene } = useGLTF('/zold_asvany.glb');
 
     return (
         <>
             {minerals.map((m) => {
-                const [scene, scale] =
-                    m.type === CELL.BLUE   ? [iceScene,   iceScale]  :
-                    m.type === CELL.YELLOW ? [goldScene,  goldScale] :
-                                             [greenScene, greenScale];
+                const [scene, cfg] =
+                    m.type === CELL.BLUE   ? [iceScene,   MINERAL_CONFIG.jeg]   :
+                    m.type === CELL.YELLOW ? [goldScene,  MINERAL_CONFIG.arany] :
+                                             [greenScene, MINERAL_CONFIG.zold];
                 return (
                     <MineralItem
                         key={`min-${m.x}-${m.y}`}
-                        m={m} scene={scene} scaleFactor={scale}
+                        m={m} scene={scene} cfg={cfg}
                     />
                 );
             })}
