@@ -184,12 +184,16 @@ export const useStore = create((set, get) => ({
             const waypoints = expandBackendRoute(data.route, data.timeline || [], s.map);
             if (waypoints.length > 0) {
                 const mineCount = waypoints.filter(w => w.action === 'mine').length;
+                // Set time limit to cover the full route + 20% buffer
+                // 1 tick = 0.5 mars hour, so ticks * 0.5 = hours
+                const neededHours = Math.ceil((waypoints.length * 0.5) * 1.2);
                 set({
                     route:           waypoints,
                     routeIdx:        0,
                     plannedMinerals: [],
                     routeSource:     'backend',
                     backendTimeline: data.timeline || [],
+                    totalTimeHours:  Math.max(neededHours, 48),
                 });
                 get()._addLog('PLAN', `[OK] Backend: ${waypoints.length} lepes, ${mineCount} banyaszat (Go/Mining)`);
                 return;
@@ -243,7 +247,9 @@ export const useStore = create((set, get) => ({
     simulationTick: () => {
         const s = get();
 
-        if (s.tick >= s.totalTimeHours * 2) {
+        // Only enforce time limit for local A* routes
+        // Backend routes run until completion (route done or battery dead)
+        if (s.routeSource !== 'backend' && s.tick >= s.totalTimeHours * 2) {
             get()._addLog('END', 'Idokeret lejart!');
             get().stopSimulation();
             set({ isFinished: true });
