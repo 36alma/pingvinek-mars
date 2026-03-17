@@ -1,25 +1,20 @@
-# launcher.spec
-# Futtatás: pyinstaller launcher.spec
+# launcher.spec — PyInstaller build konfig
+# Futtatas: pyinstaller launcher.spec
 #
-# Előfeltételek:
+# Elofeltetelek:
 #   pip install pyinstaller
-#   cd frontend && npm run build
+#   cd frontend && npm run build   (frontend/dist/ letrehozasa)
 
-from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT
-from pathlib import Path
-import sys
-
-BASE = Path('.')
+import os
+from PyInstaller.building.build_main import Analysis, PYZ, EXE
 
 a = Analysis(
     ['launcher.py'],
-    pathex=[str(BASE)],
+    pathex=['.'],
     binaries=[],
     datas=[
-        # Backend Python fájlok
-        ('backend', 'backend'),
-        # Frontend build output
-        ('frontend/dist', 'frontend/dist'),
+        ('backend',        'backend'),       # Python backend fajlok
+        ('frontend/dist',  'frontend/dist'), # Vite build output (statikus)
     ],
     hiddenimports=[
         'uvicorn',
@@ -29,22 +24,29 @@ a = Analysis(
         'uvicorn.protocols',
         'uvicorn.protocols.http',
         'uvicorn.protocols.http.auto',
+        'uvicorn.protocols.http.h11_impl',
+        'uvicorn.protocols.websockets',
+        'uvicorn.protocols.websockets.auto',
         'uvicorn.lifespan',
         'uvicorn.lifespan.on',
         'fastapi',
+        'fastapi.middleware.cors',
         'anyio',
         'anyio._backends._asyncio',
         'starlette',
         'starlette.routing',
+        'starlette.middleware',
+        'starlette.middleware.cors',
+        'pydantic',
+        'pydantic.v1',
+        'http.server',
+        'socketserver',
     ],
     hookspath=[],
     noarchive=False,
 )
 
 pyz = PYZ(a.pure, a.zipped_data)
-
-import os
-os.environ['PYTHONUTF8'] = '1'
 
 exe = EXE(
     pyz,
@@ -53,12 +55,10 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     name='PenguinExpedition',
-    argv_emulation=False,
     debug=False,
-    bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,        # False = nincs fekete ablak (de akkor nincs hibaüzenet sem)
-    icon=None,           # ide: 'assets/icon.ico' ha van
-    onefile=True,        # egyetlen .exe fájl
+    console=True,    # True = latszik a log ablak (hibakereshez hasznos)
+    onefile=True,
+    argv_emulation=False,
 )
