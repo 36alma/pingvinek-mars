@@ -347,7 +347,14 @@ export const useStore = create((set, get) => ({
             isMoving: moving, isMining: mining,
             speed: displaySpeed,
         });
-        get()._addChartPoint();
+        // Throttle chart updates at high speeds to prevent recharts crash
+        // At 25×: update every 10 ticks; at 10×: every 4; at 5×: every 2; else every tick
+        const spd = get().simSpeed;
+        const chartStride = spd >= 25 ? 10 : spd >= 10 ? 4 : spd >= 5 ? 2 : 1;
+        const newTick = get().tick; // already incremented above
+        if (newTick % chartStride === 0) {
+            get()._addChartPoint();
+        }
     },
 
     // ── Simulation controls ───────────────────────────
