@@ -13,23 +13,28 @@ function hash(x, y) {
     return ((h ^ (h >> 16)) >>> 0) / 4294967296;
 }
 
-// Preload both rock models
-useGLTF.preload('/szikla_akadaly.glb');
-useGLTF.preload('/szikla_akadaly_2.glb');
+function getScaleFactor(scene, target = 0.85) {
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z);
+    return maxDim > 0 ? target / maxDim : 1;
+}
 
-// Single rock — hooks at component level, no loop violations
-function Rock({ p, rock1Scene, rock2Scene, scale1, scale2 }) {
+// ── Preload ──────────────────────────────────────────
+useGLTF.preload('/akadaly_urkapszula.glb');
+useGLTF.preload('/jeg_asvany.glb');
+useGLTF.preload('/arany_asvany.glb');
+useGLTF.preload('/zold_asvany.glb');
+
+// ── Obstacle: urkapszula ─────────────────────────────
+function Capsule({ p, scene, scaleFactor }) {
     const h1 = hash(p.x, p.y);
     const h2 = hash(p.y, p.x);
     const h3 = hash(p.x + 7, p.y + 13);
-    const useRock2 = h1 > 0.5;
-    const baseScale = useRock2 ? scale2 : scale1;
-    const varScale = baseScale * (0.75 + h2 * 0.5);
+    const varScale = scaleFactor * (0.75 + h2 * 0.5);
     const rotY = h3 * Math.PI * 2;
-    const srcScene = useRock2 ? rock2Scene : rock1Scene;
-
-    // useMemo is now at component level — React rules satisfied
-    const cloned = useMemo(() => srcScene.clone(true), [srcScene]);
+    const cloned = useMemo(() => scene.clone(true), [scene]);
 
     return (
         <primitive
@@ -37,40 +42,8 @@ function Rock({ p, rock1Scene, rock2Scene, scale1, scale2 }) {
             position={[p.x * S, 0, p.y * S]}
             scale={[varScale, varScale * (0.8 + h1 * 0.4), varScale]}
             rotation={[0, rotY, 0]}
-            castShadow
-            receiveShadow
+            castShadow receiveShadow
         />
-    );
-}
-
-function getScaleFactor(scene) {
-    const box = new THREE.Box3().setFromObject(scene);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const maxDim = Math.max(size.x, size.y, size.z);
-    return maxDim > 0 ? 0.85 / maxDim : 1;
-}
-
-function RockInstances({ positions }) {
-    const { scene: rock1Scene } = useGLTF('/szikla_akadaly.glb');
-    const { scene: rock2Scene } = useGLTF('/szikla_akadaly_2.glb');
-
-    const scale1 = useMemo(() => getScaleFactor(rock1Scene), [rock1Scene]);
-    const scale2 = useMemo(() => getScaleFactor(rock2Scene), [rock2Scene]);
-
-    return (
-        <>
-            {positions.map((p) => (
-                <Rock
-                    key={`rock-${p.x}-${p.y}`}
-                    p={p}
-                    rock1Scene={rock1Scene}
-                    rock2Scene={rock2Scene}
-                    scale1={scale1}
-                    scale2={scale2}
-                />
-            ))}
-        </>
     );
 }
 
@@ -78,12 +51,11 @@ function FallbackObstacles({ positions }) {
     const ref = useRef();
     const count = positions.length;
     const dummy = useMemo(() => new THREE.Object3D(), []);
-    const initialized = useRef(false);
     const lastCount = useRef(-1);
 
     useFrame(() => {
         if (!ref.current || count === 0) return;
-        if (initialized.current && lastCount.current === count) return;
+        if (lastCount.current === count) return;
         positions.forEach((p, i) => {
             const h1 = hash(p.x, p.y);
             const h2 = hash(p.y, p.x);
@@ -96,7 +68,6 @@ function FallbackObstacles({ positions }) {
             ref.current.setMatrixAt(i, dummy.matrix);
         });
         ref.current.instanceMatrix.needsUpdate = true;
-        initialized.current = true;
         lastCount.current = count;
     });
 
@@ -104,76 +75,82 @@ function FallbackObstacles({ positions }) {
     return (
         <instancedMesh key={count} ref={ref} args={[null, null, count]} castShadow receiveShadow>
             <boxGeometry args={[S * 0.85, 0.5, S * 0.85]} />
-            <meshStandardMaterial color="#7a7a7a" emissive="#333333" emissiveIntensity={0.5} roughness={0.95} metalness={0.05} />
+            <meshStandardMaterial color="#7a7a7a" emissive="#333" emissiveIntensity={0.5} roughness={0.95} />
         </instancedMesh>
     );
 }
 
-// Instanced minerals for performance
-function MineralInstances({ minerals }) {
-    const blueRef = useRef();
-    const yellowRef = useRef();
-    const greenRef = useRef();
-    const dummy = useMemo(() => new THREE.Object3D(), []);
-
-    const grouped = useMemo(() => {
-        const b = [], y = [], g = [];
-        for (const m of minerals) {
-            if (m.type === CELL.BLUE) b.push(m);
-            else if (m.type === CELL.YELLOW) y.push(m);
-            else g.push(m);
-        }
-        return { b, y, g };
-    }, [minerals]);
-
-    useFrame((state) => {
-        const t = state.clock.elapsedTime;
-        [[blueRef, grouped.b], [yellowRef, grouped.y], [greenRef, grouped.g]].forEach(([ref, group]) => {
-            if (!ref.current || group.length === 0) return;
-            group.forEach((m, i) => {
-                dummy.position.set(m.x * S, 0.28 + Math.sin(t * 2 + m.x * 0.5 + m.y * 0.3) * 0.06, m.y * S);
-                dummy.rotation.y = t * 1.2;
-                dummy.updateMatrix();
-                ref.current.setMatrixAt(i, dummy.matrix);
-            });
-            ref.current.instanceMatrix.needsUpdate = true;
-        });
-    });
+function Obstacles({ positions }) {
+    const { scene } = useGLTF('/akadaly_urkapszula.glb');
+    const scaleFactor = useMemo(() => getScaleFactor(scene), [scene]);
 
     return (
         <>
-            {grouped.b.length > 0 && (
-                <instancedMesh key={`b-${grouped.b.length}`} ref={blueRef} args={[null, null, grouped.b.length]}>
-                    <octahedronGeometry args={[0.18, 0]} />
-                    <meshStandardMaterial color="#00cfff" emissive="#00cfff" emissiveIntensity={0.6} transparent opacity={0.9} roughness={0.15} metalness={0.4} />
-                </instancedMesh>
-            )}
-            {grouped.y.length > 0 && (
-                <instancedMesh key={`y-${grouped.y.length}`} ref={yellowRef} args={[null, null, grouped.y.length]}>
-                    <octahedronGeometry args={[0.18, 0]} />
-                    <meshStandardMaterial color="#ffcc00" emissive="#ffcc00" emissiveIntensity={0.6} transparent opacity={0.9} roughness={0.15} metalness={0.4} />
-                </instancedMesh>
-            )}
-            {grouped.g.length > 0 && (
-                <instancedMesh key={`g-${grouped.g.length}`} ref={greenRef} args={[null, null, grouped.g.length]}>
-                    <octahedronGeometry args={[0.18, 0]} />
-                    <meshStandardMaterial color="#00ff66" emissive="#00ff66" emissiveIntensity={0.6} transparent opacity={0.9} roughness={0.15} metalness={0.4} />
-                </instancedMesh>
-            )}
+            {positions.map((p) => (
+                <Capsule
+                    key={`obs-${p.x}-${p.y}`}
+                    p={p} scene={scene} scaleFactor={scaleFactor}
+                />
+            ))}
         </>
     );
 }
 
-// Start position marker
-function StartMarker({ x, y }) {
+// ── Mineral: single GLB instance ─────────────────────
+function MineralItem({ m, scene, scaleFactor }) {
     const ref = useRef();
+    const cloned = useMemo(() => scene.clone(true), [scene]);
 
     useFrame((state) => {
-        if (ref.current) {
-            ref.current.scale.setScalar(1 + Math.sin(state.clock.elapsedTime * 3) * 0.08);
-        }
+        if (!ref.current) return;
+        ref.current.position.y = 0.25 + Math.sin(state.clock.elapsedTime * 2 + m.x * 0.5 + m.y * 0.3) * 0.06;
+        ref.current.rotation.y = state.clock.elapsedTime * 1.2;
     });
 
+    return (
+        <primitive
+            ref={ref}
+            object={cloned}
+            position={[m.x * S, 0.25, m.y * S]}
+            scale={[scaleFactor, scaleFactor, scaleFactor]}
+        />
+    );
+}
+
+function Minerals({ minerals }) {
+    const { scene: iceScene }    = useGLTF('/jeg_asvany.glb');
+    const { scene: goldScene }   = useGLTF('/arany_asvany.glb');
+    const { scene: greenScene }  = useGLTF('/zold_asvany.glb');
+
+    const iceScale  = useMemo(() => getScaleFactor(iceScene,  0.35), [iceScene]);
+    const goldScale = useMemo(() => getScaleFactor(goldScene, 0.35), [goldScene]);
+    const greenScale = useMemo(() => getScaleFactor(greenScene, 0.35), [greenScene]);
+
+    return (
+        <>
+            {minerals.map((m) => {
+                const [scene, scale] =
+                    m.type === CELL.BLUE   ? [iceScene,   iceScale]  :
+                    m.type === CELL.YELLOW ? [goldScene,  goldScale] :
+                                             [greenScene, greenScale];
+                return (
+                    <MineralItem
+                        key={`min-${m.x}-${m.y}`}
+                        m={m} scene={scene} scaleFactor={scale}
+                    />
+                );
+            })}
+        </>
+    );
+}
+
+// ── Start marker ─────────────────────────────────────
+function StartMarker({ x, y }) {
+    const ref = useRef();
+    useFrame((state) => {
+        if (ref.current)
+            ref.current.scale.setScalar(1 + Math.sin(state.clock.elapsedTime * 3) * 0.08);
+    });
     return (
         <group position={[x * S, 0.01, y * S]}>
             <mesh rotation={[-Math.PI / 2, 0, 0]}>
@@ -188,49 +165,53 @@ function StartMarker({ x, y }) {
     );
 }
 
+// ── Terrain root ─────────────────────────────────────
 export default function Terrain() {
-    const map = useStore((s) => s.map);
-    const startX = useStore((s) => s.startX);
-    const startY = useStore((s) => s.startY);
+    const map         = useStore((s) => s.map);
+    const startX      = useStore((s) => s.startX);
+    const startY      = useStore((s) => s.startY);
     const collectedSet = useStore((s) => s.collectedSet);
 
     const { obstacles, minerals } = useMemo(() => {
-        const obs = [];
-        const mins = [];
+        const obs = [], mins = [];
         for (let y = 0; y < MAP_SIZE; y++) {
             for (let x = 0; x < MAP_SIZE; x++) {
                 const c = map[y][x];
                 if (c === CELL.OBSTACLE) obs.push({ x, y });
-                else if (c === CELL.BLUE || c === CELL.YELLOW || c === CELL.GREEN) {
+                else if (c === CELL.BLUE || c === CELL.YELLOW || c === CELL.GREEN)
                     mins.push({ x, y, type: c });
-                }
             }
         }
         return { obstacles: obs, minerals: mins };
     }, [map]);
 
-    const visibleMinerals = useMemo(() => {
-        return minerals.filter((m) => !collectedSet.has(`${m.x},${m.y}`));
-    }, [minerals, collectedSet]);
+    const visibleMinerals = useMemo(
+        () => minerals.filter((m) => !collectedSet.has(`${m.x},${m.y}`)),
+        [minerals, collectedSet]
+    );
 
     return (
         <group>
             {/* Ground */}
-            <mesh position={[MAP_SIZE / 2 - 0.5, -0.05, MAP_SIZE / 2 - 0.5]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+            <mesh position={[MAP_SIZE/2-0.5, -0.05, MAP_SIZE/2-0.5]}
+                  rotation={[-Math.PI/2, 0, 0]} receiveShadow>
                 <planeGeometry args={[MAP_SIZE, MAP_SIZE]} />
                 <meshStandardMaterial color="#b5451c" emissive="#5a1a08" emissiveIntensity={0.6} roughness={0.92} />
             </mesh>
 
             {/* Grid */}
-            <gridHelper args={[MAP_SIZE, MAP_SIZE, '#6b2f12', '#6b2f12']} position={[MAP_SIZE / 2 - 0.5, -0.03, MAP_SIZE / 2 - 0.5]} />
+            <gridHelper args={[MAP_SIZE, MAP_SIZE, '#6b2f12', '#6b2f12']}
+                        position={[MAP_SIZE/2-0.5, -0.03, MAP_SIZE/2-0.5]} />
 
-            {/* Obstacles — GLB rock models */}
+            {/* Obstacles */}
             <Suspense fallback={<FallbackObstacles positions={obstacles} />}>
-                <RockInstances positions={obstacles} />
+                <Obstacles positions={obstacles} />
             </Suspense>
 
-            {/* Minerals (instanced) */}
-            <MineralInstances minerals={visibleMinerals} />
+            {/* Minerals */}
+            <Suspense fallback={null}>
+                <Minerals minerals={visibleMinerals} />
+            </Suspense>
 
             {/* Start marker */}
             <StartMarker x={startX} y={startY} />
