@@ -23,18 +23,26 @@ function getScaleFactor(scene, target = 0.85) {
 
 // ── Preload ──────────────────────────────────────────
 useGLTF.preload('/akadaly_urkapszula.glb');
+useGLTF.preload('/szikla_akadaly.glb');
+useGLTF.preload('/szikla_akadaly_2.glb');
 useGLTF.preload('/jeg_asvany.glb');
 useGLTF.preload('/arany_asvany.glb');
 useGLTF.preload('/zold_asvany.glb');
 
-// ── Obstacle: urkapszula ─────────────────────────────
-function Capsule({ p, scene, scaleFactor }) {
+// ── Single obstacle item — picks model by hash ────────
+function ObstacleItem({ p, scenes, scaleFactors }) {
     const h1 = hash(p.x, p.y);
     const h2 = hash(p.y, p.x);
     const h3 = hash(p.x + 7, p.y + 13);
-    const varScale = scaleFactor * (0.75 + h2 * 0.5);
-    const rotY = h3 * Math.PI * 2;
-    const cloned = useMemo(() => scene.clone(true), [scene]);
+
+    // 3 models: 0=urkapszula (~20%), 1=szikla1 (~40%), 2=szikla2 (~40%)
+    const modelIdx = h1 < 0.2 ? 0 : h1 < 0.6 ? 1 : 2;
+    const scene = scenes[modelIdx];
+    const base  = scaleFactors[modelIdx];
+
+    const varScale = base * (0.75 + h2 * 0.5);
+    const rotY     = h3 * Math.PI * 2;
+    const cloned   = useMemo(() => scene.clone(true), [scene]);
 
     return (
         <primitive
@@ -81,15 +89,27 @@ function FallbackObstacles({ positions }) {
 }
 
 function Obstacles({ positions }) {
-    const { scene } = useGLTF('/akadaly_urkapszula.glb');
-    const scaleFactor = useMemo(() => getScaleFactor(scene), [scene]);
+    const { scene: capsuleScene } = useGLTF('/akadaly_urkapszula.glb');
+    const { scene: rock1Scene   } = useGLTF('/szikla_akadaly.glb');
+    const { scene: rock2Scene   } = useGLTF('/szikla_akadaly_2.glb');
+
+    const scenes = useMemo(
+        () => [capsuleScene, rock1Scene, rock2Scene],
+        [capsuleScene, rock1Scene, rock2Scene]
+    );
+    const scaleFactors = useMemo(
+        () => scenes.map((s) => getScaleFactor(s)),
+        [scenes]
+    );
 
     return (
         <>
             {positions.map((p) => (
-                <Capsule
+                <ObstacleItem
                     key={`obs-${p.x}-${p.y}`}
-                    p={p} scene={scene} scaleFactor={scaleFactor}
+                    p={p}
+                    scenes={scenes}
+                    scaleFactors={scaleFactors}
                 />
             ))}
         </>
