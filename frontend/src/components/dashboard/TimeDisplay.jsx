@@ -3,12 +3,18 @@ import { useStore } from '../../store/store';
 export default function TimeDisplay() {
     const tick = useStore((s) => s.tick);
     const totalTimeHours = useStore((s) => s.totalTimeHours);
+    const route      = useStore((s) => s.route);
+    const routeIdx   = useStore((s) => s.routeIdx);
+    const routeSource = useStore((s) => s.routeSource);
 
     const cyclePos = tick % 48;
     const isDay = cyclePos < 32;
     const sol = Math.floor(tick / 48) + 1;
     const elapsed = tick * 0.5;
-    const progress = Math.min(100, Math.round((elapsed / totalTimeHours) * 100));
+    // For backend routes: show route completion %; for local: show time %
+    const progress = routeSource === 'backend' && route.length > 0
+        ? Math.min(100, Math.round((routeIdx / route.length) * 100))
+        : Math.min(100, Math.round((elapsed / totalTimeHours) * 100));
 
     const h = Math.floor((cyclePos * 0.5));
     const m = ((cyclePos * 0.5) % 1) * 60;
@@ -31,7 +37,7 @@ export default function TimeDisplay() {
             <div className="time-stats">
                 <div className="ts"><span>Sol</span><b>{sol}</b></div>
                 <div className="ts"><span>Eltelt</span><b>{elapsed.toFixed(1)}h</b></div>
-                <div className="ts"><span>Összesen</span><b>{totalTimeHours}h</b></div>
+                <div className="ts"><span>Összesen</span><b>{routeSource === 'backend' && route.length > 0 ? `${routeIdx}/${route.length}` : `${totalTimeHours}h`}</b></div>
             </div>
 
             {/* Day/night cycle bar */}

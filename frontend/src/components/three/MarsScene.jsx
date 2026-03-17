@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
 import { useStore } from '../../store/store';
@@ -185,25 +185,25 @@ function SpaceSkybox() {
     const groupRef = useRef();
 
     // Deterministic planet definitions
-    const planets = useRef(() => {
+    const planets = useMemo(() => {
         const rng = (s) => { let x = Math.sin(s) * 43758.5453; return x - Math.floor(x); };
         const configs = [
-            { color: 0xc1440e, emissive: 0x6b1a00, name: "vörös" },    // Mars-like
-            { color: 0xe8c57a, emissive: 0x7a5a10, name: "homok" },     // Saturn-like
-            { color: 0x4a7fc1, emissive: 0x0a2a5a, name: "kék" },       // ice planet
-            { color: 0x8a5a8a, emissive: 0x3a1a3a, name: "lila" },      // gas giant
-            { color: 0xd4956a, emissive: 0x6a2a10, name: "narancs" },   // rocky
-            { color: 0x6aab8a, emissive: 0x1a4a2a, name: "zöld" },      // exotic
+            { color: 0xc1440e, emissive: 0x6b1a00 },
+            { color: 0xe8c57a, emissive: 0x7a5a10 },
+            { color: 0x4a7fc1, emissive: 0x0a2a5a },
+            { color: 0x8a5a8a, emissive: 0x3a1a3a },
+            { color: 0xd4956a, emissive: 0x6a2a10 },
+            { color: 0x6aab8a, emissive: 0x1a4a2a },
         ];
         return configs.map((cfg, i) => ({
-            x: center + (rng(i * 3.1 + 1) - 0.5) * 180,
-            y: 15 + rng(i * 7.3 + 2) * 25,
-            z: center + (rng(i * 5.7 + 3) - 0.5) * 180,
-            radius: 4 + rng(i * 2.9 + 4) * 10,
+            x: center + (rng(i * 3.1 + 1) - 0.5) * 600,
+            y: 80 + rng(i * 7.3 + 2) * 120,
+            z: center + (rng(i * 5.7 + 3) - 0.5) * 600,
+            radius: 18 + rng(i * 2.9 + 4) * 35,
             color: cfg.color,
             emissive: cfg.emissive,
         }));
-    }).current();
+    }, []);
 
     // Slowly rotate the whole group
     useFrame((state) => {
@@ -296,7 +296,7 @@ export default function MarsScene() {
     return (
         <div style={{ width: '100%', height: '100%' }}>
             <Canvas
-                camera={{ position: [startX, 40, startY + 35], fov: 45, near: 0.1, far: 500 }}
+                camera={{ position: [startX, 40, startY + 35], fov: 45, near: 0.1, far: 2000 }}
                 shadows={{ type: 'PCFSoftShadowMap' }}
                 gl={{ antialias: false, toneMapping: 1, toneMappingExposure: 1.2, powerPreference: 'high-performance' }}
                 style={{ background: '#020408' }}

@@ -110,6 +110,7 @@ function createInitialState() {
         totalTimeHours:  48,
         isRunning:       false,
         isFinished:      false,
+        finishReason:    null,   // 'success' | 'dead' | 'timeout'
         simSpeed:        1,
         _intervalId:     null,
         route:           [],
@@ -184,12 +185,16 @@ export const useStore = create((set, get) => ({
             const waypoints = expandBackendRoute(data.route, data.timeline || [], s.map);
             if (waypoints.length > 0) {
                 const mineCount = waypoints.filter(w => w.action === 'mine').length;
+                // Set time limit to cover the full route + 20% buffer
+                // 1 tick = 0.5 mars hour, so ticks * 0.5 = hours
+                const neededHours = Math.ceil((waypoints.length * 0.5) * 1.2);
                 set({
                     route:           waypoints,
                     routeIdx:        0,
                     plannedMinerals: [],
                     routeSource:     'backend',
                     backendTimeline: data.timeline || [],
+                    totalTimeHours:  Math.max(neededHours, 48),
                 });
                 get()._addLog('PLAN', `[OK] Backend: ${waypoints.length} lepes, ${mineCount} banyaszat (Go/Mining)`);
                 return;
@@ -243,10 +248,12 @@ export const useStore = create((set, get) => ({
     simulationTick: () => {
         const s = get();
 
-        if (s.tick >= s.totalTimeHours * 2) {
+        // Only enforce time limit for local A* routes
+        // Backend routes run until completion (route done or battery dead)
+        if (s.routeSource !== 'backend' && s.tick >= s.totalTimeHours * 2) {
             get()._addLog('END', 'Idokeret lejart!');
             get().stopSimulation();
-            set({ isFinished: true });
+            set({ isFinished: true, finishReason: 'timeout' });
             return;
         }
 
@@ -320,7 +327,7 @@ export const useStore = create((set, get) => ({
             if (!s.isFinished) {
                 get()._addLog('END', 'Rover hazaert! Kuldetés befejezve.');
                 get().stopSimulation();
-                set({ isFinished: true });
+                set({ isFinished: true, finishReason: 'success' });
                 return;
             }
         }
@@ -329,7 +336,7 @@ export const useStore = create((set, get) => ({
             bat = 0;
             get()._addLog('DEAD', 'Akkumulator lemerult!');
             get().stopSimulation();
-            set({ isFinished: true, battery: 0 });
+            set({ isFinished: true, finishReason: 'dead', battery: 0 });
             return;
         }
 
@@ -341,7 +348,14 @@ export const useStore = create((set, get) => ({
             isMoving: moving, isMining: mining,
             speed: displaySpeed,
         });
-        get()._addChartPoint();
+        // Throttle chart updates at high speeds to prevent recharts crash
+        // At 25×: update every 10 ticks; at 10×: every 4; at 5×: every 2; else every tick
+        const spd = get().simSpeed;
+        const chartStride = spd >= 25 ? 10 : spd >= 10 ? 4 : spd >= 5 ? 2 : 1;
+        const newTick = get().tick; // already incremented above
+        if (newTick % chartStride === 0) {
+            get()._addChartPoint();
+        }
     },
 
     // ── Simulation controls ───────────────────────────

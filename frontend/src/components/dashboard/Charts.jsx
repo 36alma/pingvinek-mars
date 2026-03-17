@@ -18,10 +18,18 @@ const TT = {
 
 export default function Charts() {
     const logHistory = useStore((s) => s.logHistory);
+    const simSpeed   = useStore((s) => s.simSpeed);
+
+    // At high speeds recharts animation causes infinite update loops.
+    // Disable animation above 2× and throttle data points aggressively.
+    const isAnimated = simSpeed <= 2;
+
+    // Throttle: show fewer points at higher speeds to reduce render load
+    const stride = simSpeed >= 10 ? 8 : simSpeed >= 5 ? 4 : 2;
 
     const distData = useMemo(() => {
-        return logHistory.filter((_, i) => i % 2 === 0).slice(-80);
-    }, [logHistory]);
+        return logHistory.filter((_, i) => i % stride === 0).slice(-60);
+    }, [logHistory, stride]);
 
     const mineralData = useMemo(() => {
         const pts = [];
@@ -32,8 +40,9 @@ export default function Charts() {
                 lastTotal = p.total;
             }
         }
-        return pts;
-    }, [logHistory]);
+        // Throttle at high speeds
+        return pts.filter((_, i) => i % Math.max(1, Math.floor(stride / 2)) === 0);
+    }, [logHistory, stride]);
 
     return (
         <div className="widget charts-widget">
@@ -48,9 +57,12 @@ export default function Charts() {
                             <XAxis dataKey="h" stroke="#555" fontSize={9} tickLine={false} />
                             <YAxis stroke="#555" fontSize={9} tickLine={false} width={28} />
                             <Tooltip {...TT} />
-                            <Bar dataKey="B" stackId="m" fill="#00cfff" name="Vízjég" radius={[0, 0, 0, 0]} />
-                            <Bar dataKey="Y" stackId="m" fill="#ffcc00" name="Arany" />
-                            <Bar dataKey="G" stackId="m" fill="#00ff66" name="Ritka" radius={[3, 3, 0, 0]} />
+                            <Bar dataKey="B" stackId="m" fill="#00cfff" name="Vízjég"
+                                isAnimationActive={isAnimated} />
+                            <Bar dataKey="Y" stackId="m" fill="#ffcc00" name="Arany"
+                                isAnimationActive={isAnimated} />
+                            <Bar dataKey="G" stackId="m" fill="#00ff66" name="Ritka"
+                                radius={[3,3,0,0]} isAnimationActive={isAnimated} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -70,7 +82,9 @@ export default function Charts() {
                         <XAxis dataKey="h" stroke="#555" fontSize={9} tickLine={false} />
                         <YAxis stroke="#555" fontSize={9} tickLine={false} width={28} />
                         <Tooltip {...TT} />
-                        <Area type="monotone" dataKey="distance" stroke="#ff9100" strokeWidth={2} fill="url(#gDist)" name="Távolság" />
+                        <Area type="monotone" dataKey="distance" stroke="#ff9100"
+                            strokeWidth={2} fill="url(#gDist)" name="Távolság"
+                            isAnimationActive={isAnimated} />
                     </AreaChart>
                 </ResponsiveContainer>
             </div>
