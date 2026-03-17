@@ -70,6 +70,13 @@ def wait_for_port(port, timeout=30):
 
 def download_file(url, dest, label):
     log(f'Letoltes: {label}...')
+    import ssl
+    # SSL verify kikapcsolasa — Windows corporate/VM kornyezetben szukseges
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
+    urllib.request.install_opener(opener)
     def progress(count, block_size, total):
         if total > 0:
             pct = min(100, int(count * block_size * 100 / total))
@@ -125,27 +132,11 @@ def setup_embedded_python():
     return str(py_exe)
 
 def get_python():
-    """
-    Prioritas:
-      1. Beepitett Python (exe melletti python_embedded/)
-      2. Rendszer Python (ha van)
-    """
+    """Mindig az embedded Pythont hasznaljuk — letoltjuk ha kell."""
     py_exe = EMBEDDED_PY_DIR / 'python.exe'
     if py_exe.exists():
         return str(py_exe)
-
-    # Rendszer Python fallback
-    for candidate in ('python', 'python3', 'py'):
-        try:
-            r = subprocess.run([candidate, '--version'],
-                capture_output=True, timeout=3)
-            if r.returncode == 0:
-                log(f'Rendszer Python: {candidate}')
-                return candidate
-        except Exception:
-            pass
-
-    return None
+    return None  # setup_embedded_python fogja letolteni
 
 def install_backend_deps(python):
     reqs = BACKEND_DIR / 'requirements.txt'
@@ -239,25 +230,20 @@ def main():
         input('Nyomj Entert...')
         sys.exit(1)
 
-    # Python berzese / letoltese
+    # Python: mindig embedded, letoltes ha kell
     python = get_python()
     if python is None:
-        log('Python nem talalhato — letoltes (internet szukseges)...')
+        log('Python letoltese (elso inditas, ~15MB, internet szukseges)...')
         try:
             python = setup_embedded_python()
+            log(f'[OK] Python kesz: {python}')
         except Exception as e:
             log(f'HIBA: Python letoltes sikertelen: {e}')
-            log('Telepitsd kezzel: https://python.org')
-            input('Nyomj Entert...')
+            log('Ellenorizd az internetkapcsolatot es probald ujra.')
+            input('Nyomj Entert a kilepeshez...')
             sys.exit(1)
-    elif not (EMBEDDED_PY_DIR / 'python.exe').exists():
-        # Van rendszer Python de embedded meg nincs — setup csendben
-        try:
-            python = setup_embedded_python()
-        except Exception:
-            pass  # Rendszer Pythonnal probaljuk
-
-    log(f'Python: {python}')
+    else:
+        log(f'[OK] Python: {python}')
     install_backend_deps(python)
 
     start_backend(python)
