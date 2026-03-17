@@ -118,22 +118,22 @@ function Obstacles({ positions }) {
 
 // ── Mineral: single GLB instance ─────────────────────
 function MineralItem({ m, scene, scaleFactor }) {
-    const ref = useRef();
+    const groupRef = useRef();
     const cloned = useMemo(() => scene.clone(true), [scene]);
 
     useFrame((state) => {
-        if (!ref.current) return;
-        ref.current.position.y = 0.25 + Math.sin(state.clock.elapsedTime * 2 + m.x * 0.5 + m.y * 0.3) * 0.06;
-        ref.current.rotation.y = state.clock.elapsedTime * 1.2;
+        if (!groupRef.current) return;
+        groupRef.current.position.y = 0.25 + Math.sin(state.clock.elapsedTime * 2 + m.x * 0.5 + m.y * 0.3) * 0.06;
+        groupRef.current.rotation.y = state.clock.elapsedTime * 1.2;
     });
 
     return (
-        <primitive
-            ref={ref}
-            object={cloned}
-            position={[m.x * S, 0.25, m.y * S]}
-            scale={[scaleFactor, scaleFactor, scaleFactor]}
-        />
+        <group ref={groupRef} position={[m.x * S, 0.25, m.y * S]}>
+            <primitive
+                object={cloned}
+                scale={[scaleFactor, scaleFactor, scaleFactor]}
+            />
+        </group>
     );
 }
 

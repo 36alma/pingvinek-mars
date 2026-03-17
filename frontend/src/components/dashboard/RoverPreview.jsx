@@ -4,10 +4,13 @@ import { OrbitControls, useGLTF } from '@react-three/drei';
 import { useStore } from '../../store/store';
 import * as THREE from 'three';
 
+// Preload outside component is fine — not a hook call
 useGLTF.preload('/rover_alaphelyzet.glb');
 useGLTF.preload('/rover_mozog.glb');
 useGLTF.preload('/rover_allo.glb');
 useGLTF.preload('/rover_fur.glb');
+
+const ARM_MESH_NAMES = new Set(['rover2.001', 'rover2.002', 'rover2.003']);
 
 function fitScene(scene, target = 1.6) {
     const box = new THREE.Box3().setFromObject(scene);
@@ -20,41 +23,53 @@ function fitScene(scene, target = 1.6) {
     return { scale: s, offset: center };
 }
 
-function PreviewModel({ path, isMoving, isMining, battery }) {
+// Static model — no hooks except useMemo
+function PreviewModel({ path }) {
     const { scene } = useGLTF(path);
-    const antennaRef = useRef();
 
     const { cloned, scale, offset } = useMemo(() => {
         const c = scene.clone(true);
+        c.traverse((obj) => {
+            if (obj.isMesh && ARM_MESH_NAMES.has(obj.name)) obj.visible = false;
+        });
         const { scale, offset } = fitScene(c);
         return { cloned: c, scale, offset };
     }, [scene]);
 
+    return (
+        <primitive
+            object={cloned}
+            scale={[scale, scale, scale]}
+            position={[-offset.x * scale, -offset.y * scale, -offset.z * scale]}
+            castShadow
+        />
+    );
+}
+
+// Antenna blink — useFrame here is inside Canvas, fine
+function AntennaLight() {
+    const ref = useRef();
     useFrame((state) => {
-        if (antennaRef.current)
-            antennaRef.current.material.emissiveIntensity =
+        if (ref.current)
+            ref.current.material.emissiveIntensity =
                 0.4 + Math.sin(state.clock.elapsedTime * 4) * 0.6;
     });
-
-    const batColor = battery > 60 ? '#39ff14' : battery > 30 ? '#ffc107' : '#ff1744';
-
     return (
-        <group>
-            <primitive
-                object={cloned}
-                scale={[scale, scale, scale]}
-                position={[-offset.x * scale, -offset.y * scale, -offset.z * scale]}
-                castShadow
-            />
-            <mesh ref={antennaRef} position={[0, 1.1, 0]}>
-                <sphereGeometry args={[0.04, 6, 6]} />
-                <meshStandardMaterial color="#ff3333" emissive="#ff3333" emissiveIntensity={0.8} />
-            </mesh>
-            <mesh position={[0, -1.0, 0.55]}>
-                <boxGeometry args={[0.7 * (battery / 100), 0.06, 0.02]} />
-                <meshStandardMaterial color={batColor} emissive={batColor} emissiveIntensity={0.9} />
-            </mesh>
-        </group>
+        <mesh ref={ref} position={[0, 1.1, 0]}>
+            <sphereGeometry args={[0.04, 6, 6]} />
+            <meshStandardMaterial color="#ff3333" emissive="#ff3333" emissiveIntensity={0.8} />
+        </mesh>
+    );
+}
+
+// Battery strip — pure geometry, no hooks
+function BatteryStrip({ battery }) {
+    const batColor = battery > 60 ? '#39ff14' : battery > 30 ? '#ffc107' : '#ff1744';
+    return (
+        <mesh position={[0, -1.05, 0.55]}>
+            <boxGeometry args={[0.7 * (battery / 100), 0.06, 0.02]} />
+            <meshStandardMaterial color={batColor} emissive={batColor} emissiveIntensity={0.9} />
+        </mesh>
     );
 }
 
@@ -67,7 +82,9 @@ function FallbackModel() {
     );
 }
 
+// ── Main export ───────────────────────────────────────
 export default function RoverPreview() {
+    // All useStore calls here — outside Canvas, correct
     const battery   = useStore((s) => s.battery);
     const speed     = useStore((s) => s.speed);
     const isMoving  = useStore((s) => s.isMoving);
@@ -108,13 +125,10 @@ export default function RoverPreview() {
                     <directionalLight position={[3, 5, 3]} intensity={1.5} />
                     <directionalLight position={[-3, 2, -2]} intensity={0.5} color="#ff9944" />
                     <Suspense fallback={<FallbackModel />}>
-                        <PreviewModel
-                            key={modelPath}
-                            path={modelPath}
-                            isMoving={isMoving}
-                            isMining={isMining}
-                            battery={battery}
-                        />
+                        {/* key forces remount when model changes state */}
+                        <PreviewModel key={modelPath} path={modelPath} />
+                        <AntennaLight />
+                        <BatteryStrip battery={battery} />
                     </Suspense>
                     <OrbitControls
                         enablePan={false}

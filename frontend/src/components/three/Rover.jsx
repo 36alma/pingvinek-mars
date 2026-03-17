@@ -23,10 +23,22 @@ function fitScene(scene, targetSize = 0.9) {
     return { scale, offset: center };
 }
 
+// Mesh names that are part of the robotic arm — hide them
+const ARM_MESH_NAMES = new Set(['rover2.001', 'rover2.002', 'rover2.003']);
+
+function hideArmMeshes(scene) {
+    scene.traverse((obj) => {
+        if (obj.isMesh && ARM_MESH_NAMES.has(obj.name)) {
+            obj.visible = false;
+        }
+    });
+}
+
 function RoverModel({ path }) {
     const { scene } = useGLTF(path);
     const { cloned, scale, offset } = useMemo(() => {
         const c = scene.clone(true);
+        hideArmMeshes(c);
         const { scale, offset } = fitScene(c);
         return { cloned: c, scale, offset };
     }, [scene]);
