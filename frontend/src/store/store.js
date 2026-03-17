@@ -1,34 +1,113 @@
 /**
  * Zustand Store — Mars Rover Simulation State
  *
- * Manages: map, rover, simulation clock, battery, route, event log.
+ * Route source priority:
+ *   1. Backend GET /rover/route  → Go/Mining blocks with speedPlan
+ *   2. Fallback: local A* planner (planRoute)
+ *
+ * Internal route format (flat waypoint list):
+ *   { x, y, action: 'move'|'mine'|'return', mineralType?, speed?: 'SLOW'|'NORMAL'|'FAST' }
+ *
+ * The backend route is expanded into this flat format so the existing
+ * simulationTick logic works with minimal changes.
+ * The key change: 'move' waypoints now carry a `speed` field from speedPlan,
+ * and energy is calculated from that speed instead of the global `speed` state.
  */
 import { create } from 'zustand';
 import { generateMap, findMinerals, CELL, MAP_SIZE, parseApiMap } from '../simulation/mapData';
 import { planRoute } from '../simulation/pathfinding';
 
 // ── Constants ────────────────────────────────────────
-const BACKEND_URL = 'http://localhost:8000/api/v1';
+const BACKEND_URL = 'http://localhost:5000';
 const CYCLE_TICKS = 48;   // 24 hours in ticks (1 tick = 30 min)
 const DAY_TICKS = 32;     // 16 hours
-const K = 2;              // energy constant
+const K = 2;              // energy constant  E = K * v^2
 const SOLAR_CHARGE = 10;  // energy gained per tick during day
 const STANDBY_DRAIN = 1;  // idle consumption per tick
 const MINE_DRAIN = 2;     // mining consumption per tick
 const TICK_INTERVAL_BASE = 400; // ms per tick at 1× speed
 
+// Speed name → numeric value (matches backend MoveType enum)
+const SPEED_VAL = { SLOW: 1, NORMAL: 2, FAST: 3 };
+
 // ── Helpers ──────────────────────────────────────────
 const isDaytime = (tick) => (tick % CYCLE_TICKS) < DAY_TICKS;
-const marsHour = (tick) => {
-    const pos = tick % CYCLE_TICKS;
-    return pos * 0.5; // 0 – 24
-};
+const marsHour = (tick) => (tick % CYCLE_TICKS) * 0.5;
 const formatTime = (tick) => {
     const h = marsHour(tick);
     const hh = Math.floor(h).toString().padStart(2, '0');
     const mm = ((h % 1) * 60).toString().padStart(2, '0');
     return `${hh}:${mm}`;
 };
+
+/**
+ * Convert backend /rover/route response into the flat internal waypoint format.
+ *
+ * Critically: we simulate the backend rover.time state step-by-step so that
+ * each waypoint carries the *exact* drain and charge values the backend computed.
+ * This prevents the frontend energy model from diverging.
+ *
+ * Backend energy rules (from rover.py):
+ *   - @Time decorator: charge() then add_time() AFTER each action
+ *   - charge(): if time in [0,16) → battery += 10
+ *   - move drain: 2 * v²  (SLOW=1, NORMAL=2, FAST=3)
+ *   - mine drain: 2
+ *   - add_time(): time += 0.5, wraps at 24
+ *
+ * Each waypoint gets: { drain, charge } so simulationTick just applies them.
+ */
+function expandBackendRoute(blocks, map) {
+    const flat = [];
+
+    // Simulate backend rover.time starting at 0 (RoverService init)
+    let simTime = 0;
+
+    const stepTime = () => {
+        // Mirrors @Time decorator: charge() then add_time()
+        const chargeAmt = (simTime >= 0 && simTime < 16) ? 10 : 0;
+        simTime += 0.5;
+        if (simTime >= 24) simTime = 0;
+        return chargeAmt;
+    };
+
+    for (const block of blocks) {
+        const path = block.path;
+
+        if (block.type === 'Go') {
+            // Build per-edge speed array from speedPlan
+            const edgeSpeeds = [];
+            for (const s of (block.speedPlan || [])) {
+                const steps = SPEED_VAL[s] || 1;
+                for (let i = 0; i < steps; i++) edgeSpeeds.push(s);
+            }
+
+            for (let i = 1; i < path.length; i++) {
+                const [x, y] = path[i];
+                const speed = edgeSpeeds[i - 1] || 'NORMAL';
+                const v = SPEED_VAL[speed] || 2;
+                const drain = K * v * v;          // 2*v²
+                const charge = stepTime();          // charge AFTER move
+                flat.push({ x, y, action: 'move', speed, drain, charge });
+            }
+
+        } else if (block.type === 'Mining') {
+            const [x, y] = path[0];
+            const drain = MINE_DRAIN;              // 2
+            const charge = stepTime();              // charge AFTER mine
+            let mineralType = null;
+            if (map && map[y] && map[y][x]) {
+                const cell = map[y][x];
+                if (cell === CELL.BLUE)   mineralType = 'B';
+                else if (cell === CELL.YELLOW) mineralType = 'Y';
+                else if (cell === CELL.GREEN)  mineralType = 'G';
+            }
+            flat.push({ x, y, action: 'mine', mineralType, drain, charge });
+        }
+    }
+
+    if (flat.length > 0) flat[flat.length - 1].action = 'return';
+    return flat;
+}
 
 // ── Initial State Factory ────────────────────────────
 function createInitialState() {
@@ -47,7 +126,7 @@ function createInitialState() {
         roverX: startX,
         roverY: startY,
         battery: 100,
-        speed: 2,
+        speed: 2,           // display speed (1=slow,2=normal,3=fast), overridden per-step by backend speedPlan
         inventory: { B: 0, Y: 0, G: 0 },
         totalDistance: 0,
         isMoving: false,
@@ -62,13 +141,14 @@ function createInitialState() {
         _intervalId: null,
 
         // Route
-        route: [],
+        route: [],           // flat waypoint array
         routeIdx: 0,
         plannedMinerals: [],
+        routeSource: null,   // 'backend' | 'local' | null
 
-        // Logs (each entry recorded every tick while running)
+        // Logs
         logs: [],
-        logHistory: [], // condensed for charts: {tick, battery, distance, minerals}
+        logHistory: [],
     };
 }
 
@@ -83,14 +163,12 @@ export const useStore = create((set, get) => ({
             if (!res.ok) throw new Error('Network response was not ok');
             const apiData = await res.json();
 
-            // Validate API data structure (basic check)
             if (!apiData.map || !apiData.rows || !apiData.cols) {
                 throw new Error('Invalid API map format');
             }
 
             const { map, startX, startY } = parseApiMap(apiData);
             const minerals = findMinerals(map);
-
             set({ map, startX, startY, roverX: startX, roverY: startY, minerals });
             console.log('🗺️ Map loaded from API');
             return { source: 'api' };
@@ -122,19 +200,33 @@ export const useStore = create((set, get) => ({
     setTotalTime: (h) => set({ totalTimeHours: Math.max(24, h) }),
 
     // ── Route Generation ──
-    // Fetches a single segment route from backend BFS for two points
-    _fetchBackendPath: async (x1, y1, x2, y2) => {
+
+    /**
+     * Fetch full mission route from backend GET /rover/route.
+     * Returns expanded flat waypoints, or null on failure.
+     */
+    _fetchBackendRoute: async () => {
         try {
             const res = await fetch(
-                `${BACKEND_URL}/rover/base_route`,
-                { signal: AbortSignal.timeout(5000) }
+                `${BACKEND_URL}/rover/route`,
+                { signal: AbortSignal.timeout(15000) }  // backend may take time (BFS + clustering)
             );
-            if (!res.ok) return null;
-            const data = await res.json();
-            if (!Array.isArray(data)) return null;
-            // Convert [[x,y],...] → [{x,y},...] 
-            return data.map(([x, y]) => ({ x, y }));
-        } catch {
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                console.warn('Backend route error:', err.detail || res.status);
+                return null;
+            }
+            const blocks = await res.json();
+            if (!Array.isArray(blocks) || blocks.length === 0) return null;
+
+            // Validate basic structure
+            for (const b of blocks) {
+                if (!b.type || !Array.isArray(b.path)) return null;
+            }
+
+            return blocks;
+        } catch (e) {
+            console.warn('Backend route fetch failed:', e.message);
             return null;
         }
     },
@@ -143,24 +235,23 @@ export const useStore = create((set, get) => ({
         const s = get();
         get()._addLog('PLAN', '🔄 Útvonal tervezés folyamatban...');
 
-        // Try backend route first (test endpoint returns a random valid path)
-        const backendPath = await get()._fetchBackendPath();
-        if (backendPath && backendPath.length > 1) {
-            // Backend returned a valid path — use it as a demo/test route
-            // Convert to internal waypoint format with move actions
-            const route = backendPath.map((p, i) => ({
-                x: p.x,
-                y: p.y,
-                action: i === backendPath.length - 1 ? 'return' : 'move',
-            }));
-            set({ route, routeIdx: 0, plannedMinerals: [] });
-            get()._addLog('PLAN', `✅ Backend útvonal: ${route.length} lépés (BFS)`);
-            return;
+        // 1. Try backend /rover/route (full mission plan)
+        const blocks = await get()._fetchBackendRoute();
+        if (blocks) {
+            const route = expandBackendRoute(blocks, s.map);
+            if (route.length > 0) {
+                // Count planned mining steps
+                const mineCount = route.filter(w => w.action === 'mine').length;
+                set({ route, routeIdx: 0, plannedMinerals: [], routeSource: 'backend' });
+                get()._addLog('PLAN', `✅ Backend útvonal: ${route.length} lépés, ${mineCount} bányászat (Go/Mining blokkok)`);
+                return;
+            }
         }
 
-        // Fallback: local A* planner
+        // 2. Fallback: local A* planner
+        get()._addLog('PLAN', '⚠️ Backend nem elérhető, helyi A* tervező...');
         const { route, plannedMinerals } = planRoute(s.map, s.startX, s.startY, s.minerals, s.totalTimeHours);
-        set({ route, routeIdx: 0, plannedMinerals });
+        set({ route, routeIdx: 0, plannedMinerals, routeSource: 'local' });
         get()._addLog('PLAN', `🗺️ Helyi A* útvonal: ${route.length} lépés, ${plannedMinerals.length} ásvány célpont`);
     },
 
@@ -183,7 +274,6 @@ export const useStore = create((set, get) => ({
             type,
             message,
         };
-        // Cap logs at 200 to prevent memory growth
         const logs = s.logs.length >= 200
             ? [...s.logs.slice(-199), entry]
             : [...s.logs, entry];
@@ -195,7 +285,6 @@ export const useStore = create((set, get) => ({
         const cyclePos = s.tick % 48;
         const isDay = cyclePos < 32;
         const spd = s.speed;
-        // Approximate energy this tick
         const consumed = s.isMining ? 2 : s.isMoving ? (2 * spd * spd) : 1;
         const solar = isDay ? 10 : 0;
         const point = {
@@ -211,7 +300,6 @@ export const useStore = create((set, get) => ({
             consumed,
             isDay,
         };
-        // Cap chart history at 300 points
         const logHistory = s.logHistory.length >= 300
             ? [...s.logHistory.slice(-299), point]
             : [...s.logHistory, point];
@@ -240,45 +328,68 @@ export const useStore = create((set, get) => ({
         let collected = new Set(s.collectedSet);
         let moving = false;
         let mining = false;
+        let displaySpeed = s.speed;
 
         if (idx < s.route.length) {
             const wp = s.route[idx];
 
             if (wp.action === 'mine') {
-                // Mining tick
-                bat -= MINE_DRAIN;
-                if (day) bat += SOLAR_CHARGE;
-                bat = Math.min(100, Math.max(0, bat));
+                // ── Mining tick ──────────────────────────────
                 mining = true;
+
+                if (s.routeSource === 'backend') {
+                    // Use pre-computed drain/charge from expandBackendRoute
+                    bat -= wp.drain ?? MINE_DRAIN;
+                    bat += wp.charge ?? 0;
+                } else {
+                    bat -= MINE_DRAIN;
+                    if (day) bat += SOLAR_CHARGE;
+                }
+                bat = Math.min(100, Math.max(0, bat));
 
                 if (wp.mineralType) {
                     inv[wp.mineralType] = (inv[wp.mineralType] || 0) + 1;
                     collected.add(`${wp.x},${wp.y}`);
+                    get()._addLog('MINE', `⛏️ ${wp.mineralType} ásvány kibányászva (${wp.x}, ${wp.y})`);
                 }
                 idx++;
-                get()._addLog('MINE', `⛏️ ${wp.mineralType} ásvány kibányászva (${wp.x}, ${wp.y})`);
 
             } else {
-                // Movement tick — move up to `speed` waypoints
-                const spd = s.speed;
-                bat -= K * spd * spd;
-                if (day) bat += SOLAR_CHARGE;
-                bat = Math.min(100, Math.max(0, bat));
+                // ── Movement tick ─────────────────────────────
                 moving = true;
 
-                let steps = spd;
-                while (steps > 0 && idx < s.route.length) {
-                    const w = s.route[idx];
-                    if (w.action === 'mine') break;
-                    x = w.x;
-                    y = w.y;
+                if (s.routeSource === 'backend') {
+                    // Use pre-computed drain/charge — exactly mirrors backend rover.py
+                    bat -= wp.drain ?? K * 4;
+                    bat += wp.charge ?? 0;
+                    bat = Math.min(100, Math.max(0, bat));
+                    const v = wp.speed ? (SPEED_VAL[wp.speed] || 2) : 2;
+                    displaySpeed = v;
+                    x = wp.x;
+                    y = wp.y;
                     dist++;
                     idx++;
-                    steps--;
+                } else {
+                    // Local A* route: advance `speed` waypoints per tick
+                    const spd = s.speed;
+                    displaySpeed = spd;
+                    bat -= K * spd * spd;
+                    if (day) bat += SOLAR_CHARGE;
+                    bat = Math.min(100, Math.max(0, bat));
+                    let steps = spd;
+                    while (steps > 0 && idx < s.route.length) {
+                        const w = s.route[idx];
+                        if (w.action === 'mine') break;
+                        x = w.x;
+                        y = w.y;
+                        dist++;
+                        idx++;
+                        steps--;
+                    }
                 }
             }
         } else {
-            // Route done
+            // Route done — standby
             bat -= STANDBY_DRAIN;
             if (day) bat += SOLAR_CHARGE;
             bat = Math.min(100, Math.max(0, bat));
@@ -311,9 +422,9 @@ export const useStore = create((set, get) => ({
             collectedSet: collected,
             isMoving: moving,
             isMining: mining,
+            speed: displaySpeed,
         });
 
-        // Chart data every tick
         get()._addChartPoint();
     },
 
@@ -324,7 +435,7 @@ export const useStore = create((set, get) => ({
         if (s.route.length === 0) await get().generateRoute();
 
         get()._addLog('START', `▶ Szimuláció indítva (${s.simSpeed}× sebesség)`);
-        get()._addChartPoint(); // initial point
+        get()._addChartPoint();
 
         const ms = TICK_INTERVAL_BASE / s.simSpeed;
         const id = setInterval(() => get().simulationTick(), ms);
