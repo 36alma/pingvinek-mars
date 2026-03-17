@@ -69,12 +69,27 @@ function ActiveRoverModel({ isMoving, isMining, isRunning }) {
 
 export default function Rover() {
     const group     = useRef();
+    const targetRotY = useRef(0);  // smooth rotation target
     const roverX    = useStore((s) => s.roverX);
     const roverY    = useStore((s) => s.roverY);
     const isMoving  = useStore((s) => s.isMoving);
     const isMining  = useStore((s) => s.isMining);
     const isRunning = useStore((s) => s.isRunning);
     const simSpeed  = useStore((s) => s.simSpeed);
+    const route     = useStore((s) => s.route);
+    const routeIdx  = useStore((s) => s.routeIdx);
+
+    // Compute facing direction from current → next waypoint
+    // This gives the TRUE direction the rover is heading, not lerp artifact
+    const facingAngle = (() => {
+        if (!isMoving) return null;
+        const next = route[routeIdx];
+        if (!next) return null;
+        const dx = next.x - roverX;
+        const dz = next.y - roverY;  // note: y in map = z in 3D
+        if (Math.abs(dx) < 0.001 && Math.abs(dz) < 0.001) return null;
+        return Math.atan2(dx, dz);
+    })();
 
     useFrame((_, delta) => {
         if (!group.current) return;
@@ -88,15 +103,16 @@ export default function Rover() {
         curr.x += (tx - curr.x) * lerpT;
         curr.z += (tz - curr.z) * lerpT;
 
-        const dx = tx - curr.x;
-        const dz = tz - curr.z;
-        if (Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01) {
-            const target = Math.atan2(dx, dz);
-            let diff = target - group.current.rotation.y;
-            while (diff >  Math.PI) diff -= 2 * Math.PI;
-            while (diff < -Math.PI) diff += 2 * Math.PI;
-            group.current.rotation.y += diff * lerpT;
+        // Rotation: use next waypoint direction when moving
+        if (facingAngle !== null) {
+            targetRotY.current = facingAngle;
         }
+        let diff = targetRotY.current - group.current.rotation.y;
+        while (diff >  Math.PI) diff -= 2 * Math.PI;
+        while (diff < -Math.PI) diff += 2 * Math.PI;
+        // Rotate faster when simSpeed is high so it doesn't lag behind
+        const rotLerp = 1 - Math.pow(0.001, delta * Math.min(simSpeed, 10) * 4);
+        group.current.rotation.y += diff * rotLerp;
 
         const targetY = isMining ? 0.22 : 0.18;
         curr.y += (targetY - curr.y) * lerpT;
