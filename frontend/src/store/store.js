@@ -110,6 +110,7 @@ function createInitialState() {
         totalTimeHours:  48,
         isRunning:       false,
         isFinished:      false,
+        finishReason:    null,   // 'success' | 'dead' | 'timeout'
         simSpeed:        1,
         _intervalId:     null,
         route:           [],
@@ -252,7 +253,7 @@ export const useStore = create((set, get) => ({
         if (s.routeSource !== 'backend' && s.tick >= s.totalTimeHours * 2) {
             get()._addLog('END', 'Idokeret lejart!');
             get().stopSimulation();
-            set({ isFinished: true });
+            set({ isFinished: true, finishReason: 'timeout' });
             return;
         }
 
@@ -326,7 +327,7 @@ export const useStore = create((set, get) => ({
             if (!s.isFinished) {
                 get()._addLog('END', 'Rover hazaert! Kuldetés befejezve.');
                 get().stopSimulation();
-                set({ isFinished: true });
+                set({ isFinished: true, finishReason: 'success' });
                 return;
             }
         }
@@ -335,7 +336,7 @@ export const useStore = create((set, get) => ({
             bat = 0;
             get()._addLog('DEAD', 'Akkumulator lemerult!');
             get().stopSimulation();
-            set({ isFinished: true, battery: 0 });
+            set({ isFinished: true, finishReason: 'dead', battery: 0 });
             return;
         }
 

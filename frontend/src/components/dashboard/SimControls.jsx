@@ -1,5 +1,62 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useStore } from '../../store/store';
+
+// ── Result Modal ──────────────────────────────────────
+function ResultModal({ reason, inventory, distance, onClose }) {
+    const isSuccess = reason === 'success';
+    const isDead    = reason === 'dead';
+
+    const icon  = isSuccess ? '🏆' : isDead ? '🪫' : '⏱️';
+    const title = isSuccess ? 'Küldetés teljesítve!'
+                : isDead    ? 'Akkumulátor lemerült'
+                :             'Időkeret lejárt';
+    const color = isSuccess ? '#39ff14' : isDead ? '#ff1744' : '#ffc107';
+    const desc  = isSuccess
+        ? 'A rover sikeresen begyűjtötte az ásványokat és visszatért a bázisra.'
+        : isDead
+        ? 'A rover energiája elfogyott mielőtt visszaért volna a bázisra.'
+        : 'A küldetés időkerete lejárt.';
+
+    const total = inventory.B + inventory.Y + inventory.G;
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-box result-modal-box" onClick={(e) => e.stopPropagation()}>
+                <div className="result-icon">{icon}</div>
+                <h2 className="modal-title" style={{ color }}>{title}</h2>
+                <p className="modal-desc">{desc}</p>
+
+                <div className="result-stats">
+                    <div className="result-stat">
+                        <span className="result-stat-val" style={{ color: '#00cfff' }}>{inventory.B}</span>
+                        <span className="result-stat-label">💎 Vízjég</span>
+                    </div>
+                    <div className="result-stat">
+                        <span className="result-stat-val" style={{ color: '#ffcc00' }}>{inventory.Y}</span>
+                        <span className="result-stat-label">🥇 Arany</span>
+                    </div>
+                    <div className="result-stat">
+                        <span className="result-stat-val" style={{ color: '#00ff66' }}>{inventory.G}</span>
+                        <span className="result-stat-label">🪨 Ritka</span>
+                    </div>
+                    <div className="result-stat">
+                        <span className="result-stat-val" style={{ color: '#fff' }}>{total}</span>
+                        <span className="result-stat-label">📦 Összes</span>
+                    </div>
+                </div>
+
+                <div className="result-distance">
+                    <span>Megtett út:</span>
+                    <b>{distance} blokk</b>
+                </div>
+
+                <button className="btn btn-accent modal-btn" onClick={onClose}>
+                    Bezárás
+                </button>
+            </div>
+        </div>
+    );
+}
 
 // ── Planning Modal ────────────────────────────────────
 function PlanningModal({ isPlanning, isReady, onStart, onClose }) {
@@ -38,19 +95,31 @@ function PlanningModal({ isPlanning, isReady, onStart, onClose }) {
 
 // ── Main component ────────────────────────────────────
 export default function SimControls() {
-    const isRunning  = useStore((s) => s.isRunning);
-    const isFinished = useStore((s) => s.isFinished);
-    const simSpeed   = useStore((s) => s.simSpeed);
-    const route      = useStore((s) => s.route);
-    const start      = useStore((s) => s.startSimulation);
-    const pause      = useStore((s) => s.pauseSimulation);
-    const reset      = useStore((s) => s.resetSimulation);
-    const setSpeed   = useStore((s) => s.setSimSpeed);
-    const genRoute   = useStore((s) => s.generateRoute);
+    const isRunning    = useStore((s) => s.isRunning);
+    const isFinished   = useStore((s) => s.isFinished);
+    const finishReason = useStore((s) => s.finishReason);
+    const inventory    = useStore((s) => s.inventory);
+    const distance     = useStore((s) => s.totalDistance);
+    const simSpeed     = useStore((s) => s.simSpeed);
+    const route        = useStore((s) => s.route);
+    const start        = useStore((s) => s.startSimulation);
+    const pause        = useStore((s) => s.pauseSimulation);
+    const reset        = useStore((s) => s.resetSimulation);
+    const setSpeed     = useStore((s) => s.setSimSpeed);
+    const genRoute     = useStore((s) => s.generateRoute);
 
-    const [showModal, setShowModal]   = useState(false);
-    const [isPlanning, setIsPlanning] = useState(false);
-    const [routeReady, setRouteReady] = useState(false);
+    const [showModal, setShowModal]     = useState(false);
+    const [isPlanning, setIsPlanning]   = useState(false);
+    const [routeReady, setRouteReady]   = useState(false);
+    const [showResult, setShowResult]   = useState(false);
+    const resetPending = useRef(false);
+
+    // Auto-show result modal when simulation finishes
+    useEffect(() => {
+        if (isFinished && finishReason && !resetPending.current) {
+            setShowResult(true);
+        }
+    }, [isFinished, finishReason]);
 
     const handleInditas = async () => {
         if (route.length > 0) {
@@ -77,15 +146,29 @@ export default function SimControls() {
     };
 
     const handleReset = () => {
+        resetPending.current = true;   // block useEffect from re-opening modal
         setShowModal(false);
+        setShowResult(false);
         setIsPlanning(false);
         setRouteReady(false);
-        reset();
+        reset();                        // store: isFinished → false
+        // Clear guard after React has re-rendered with the new store state
+        setTimeout(() => { resetPending.current = false; }, 100);
     };
 
     return (
         <>
-            {/* Modal */}
+            {/* Result modal */}
+            {showResult && finishReason && (
+                <ResultModal
+                    reason={finishReason}
+                    inventory={inventory}
+                    distance={distance}
+                    onClose={() => setShowResult(false)}
+                />
+            )}
+
+            {/* Planning modal */}
             {showModal && (
                 <PlanningModal
                     isPlanning={isPlanning}
@@ -110,7 +193,6 @@ export default function SimControls() {
                     ) : (
                         <button className="btn btn-warn" onClick={pause}>⏸ Szünet</button>
                     )}
-                    <button className="btn btn-danger" onClick={handleReset}>↺ Reset</button>
                 </div>
 
                 <div className="ctrl-group">
