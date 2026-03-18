@@ -13,10 +13,13 @@ function hash(x, y) {
     return ((h ^ (h >> 16)) >>> 0) / 4294967296;
 }
 
-// ── Preload obstacle models ───────────────────────────
+// ── Preload all models ───────────────────────────────
 useGLTF.preload('/akadaly_urkapszula.glb');
 useGLTF.preload('/szikla_akadaly.glb');
 useGLTF.preload('/szikla_akadaly_2.glb');
+useGLTF.preload('/jeg_asvany.glb');
+useGLTF.preload('/arany_asvany.glb');
+useGLTF.preload('/zold_asvany.glb');
 
 function getScaleFactor(scene, target = 0.85) {
     const box = new THREE.Box3().setFromObject(scene);
@@ -119,65 +122,70 @@ function Obstacles({ positions }) {
     );
 }
 
-// ── Minerals — classic octahedron geometry (no GLB) ──
-function MineralInstances({ minerals }) {
-    const blueRef   = useRef();
-    const yellowRef = useRef();
-    const greenRef  = useRef();
-    const dummy     = useMemo(() => new THREE.Object3D(), []);
+// Pre-computed from GLB accessor bounds (target = 0.4 world units)
+// jej:   maxDim=17.46, center=(10.07, 0,    10.27)
+// arany: maxDim=17.04, center=(7.92,  3.44,  9.13)
+// zold:  maxDim=20.00, center=(-10,   5.5,  -9.87)
+const MINERAL_CFG = {
+    B: { path: '/jeg_asvany.glb',   s: 0.4/17.46, ox: -10.07*(0.4/17.46), oy: 0,                   oz: -10.27*(0.4/17.46) },
+    Y: { path: '/arany_asvany.glb', s: 0.4/17.04, ox:  -7.92*(0.4/17.04), oy: -3.44*(0.4/17.04),   oz:  -9.13*(0.4/17.04) },
+    G: { path: '/zold_asvany.glb',  s: 0.4/20.00, ox:  10.00*(0.4/20.00), oy: 0,                   oz:   9.87*(0.4/20.00) },
+};
 
-    const grouped = useMemo(() => {
-        const b = [], y = [], g = [];
-        for (const m of minerals) {
-            if      (m.type === CELL.BLUE)   b.push(m);
-            else if (m.type === CELL.YELLOW) y.push(m);
-            else                              g.push(m);
-        }
-        return { b, y, g };
-    }, [minerals]);
+function MineralItem({ m, cfg }) {
+    const { scene } = useGLTF(cfg.path);
+    const groupRef  = useRef();
+
+    const cloned = useMemo(() => {
+        const c = scene.clone(true);
+        c.traverse((obj) => {
+            if (obj.isMesh && obj.material) {
+                obj.material = Array.isArray(obj.material)
+                    ? obj.material.map(mat => mat.clone())
+                    : obj.material.clone();
+            }
+        });
+        return c;
+    }, [scene, m.x, m.y]);
 
     useFrame((state) => {
-        const t = state.clock.elapsedTime;
-        [[blueRef, grouped.b], [yellowRef, grouped.y], [greenRef, grouped.g]].forEach(([ref, group]) => {
-            if (!ref.current || group.length === 0) return;
-            group.forEach((m, i) => {
-                dummy.position.set(
-                    m.x * S,
-                    0.28 + Math.sin(t * 2 + m.x * 0.5 + m.y * 0.3) * 0.06,
-                    m.y * S
-                );
-                dummy.rotation.y = t * 1.2;
-                dummy.updateMatrix();
-                ref.current.setMatrixAt(i, dummy.matrix);
-            });
-            ref.current.instanceMatrix.needsUpdate = true;
-        });
+        if (!groupRef.current) return;
+        groupRef.current.position.y =
+            0.18 + Math.sin(state.clock.elapsedTime * 2 + m.x * 0.5 + m.y * 0.3) * 0.06;
+        groupRef.current.rotation.y = state.clock.elapsedTime * 1.2;
     });
 
     return (
-        <>
-            {grouped.b.length > 0 && (
-                <instancedMesh key={`b-${grouped.b.length}`} ref={blueRef} args={[null, null, grouped.b.length]}>
-                    <octahedronGeometry args={[0.18, 0]} />
-                    <meshStandardMaterial color="#00cfff" emissive="#00cfff" emissiveIntensity={0.6}
-                        transparent opacity={0.9} roughness={0.15} metalness={0.4} />
-                </instancedMesh>
-            )}
-            {grouped.y.length > 0 && (
-                <instancedMesh key={`y-${grouped.y.length}`} ref={yellowRef} args={[null, null, grouped.y.length]}>
-                    <octahedronGeometry args={[0.18, 0]} />
-                    <meshStandardMaterial color="#ffcc00" emissive="#ffcc00" emissiveIntensity={0.6}
-                        transparent opacity={0.9} roughness={0.15} metalness={0.4} />
-                </instancedMesh>
-            )}
-            {grouped.g.length > 0 && (
-                <instancedMesh key={`g-${grouped.g.length}`} ref={greenRef} args={[null, null, grouped.g.length]}>
-                    <octahedronGeometry args={[0.18, 0]} />
-                    <meshStandardMaterial color="#00ff66" emissive="#00ff66" emissiveIntensity={0.6}
-                        transparent opacity={0.9} roughness={0.15} metalness={0.4} />
-                </instancedMesh>
-            )}
-        </>
+        <group ref={groupRef} position={[m.x * S, 0.18, m.y * S]}>
+            <primitive
+                object={cloned}
+                scale={[cfg.s, cfg.s, cfg.s]}
+                position={[cfg.ox, cfg.oy, cfg.oz]}
+            />
+        </group>
+    );
+}
+
+function MineralInstances({ minerals }) {
+    const { scene: iceScene }   = useGLTF('/jeg_asvany.glb');
+    const { scene: goldScene }  = useGLTF('/arany_asvany.glb');
+    const { scene: greenScene } = useGLTF('/zold_asvany.glb');
+
+    // Warm up bounding boxes so Three.js knows the sizes
+    useMemo(() => {
+        [iceScene, goldScene, greenScene].forEach(s => new THREE.Box3().setFromObject(s));
+    }, [iceScene, goldScene, greenScene]);
+
+    return (
+        <Suspense fallback={null}>
+            {minerals.map((m) => (
+                <MineralItem
+                    key={`min-${m.x}-${m.y}`}
+                    m={m}
+                    cfg={MINERAL_CFG[m.type] || MINERAL_CFG.B}
+                />
+            ))}
+        </Suspense>
     );
 }
 
