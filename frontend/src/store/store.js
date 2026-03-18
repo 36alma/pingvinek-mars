@@ -100,6 +100,8 @@ function createInitialState() {
         collectedSet:    new Set(),
         roverX:          startX,
         roverY:          startY,
+        prevRoverX:      startX,
+        prevRoverY:      startY,
         battery:         100,
         speed:           2,
         inventory:       { B: 0, Y: 0, G: 0 },
@@ -161,17 +163,31 @@ export const useStore = create((set, get) => ({
     // ── Route generation ─────────────────────────────
     _fetchBackendRoute: async () => {
         try {
+            console.log('[Route] Fetching:', `${BACKEND_URL}/rover/route`);
             const res = await fetch(`${BACKEND_URL}/rover/route`,
-                { signal: AbortSignal.timeout(30000) });
-            if (!res.ok) return null;
+                { signal: AbortSignal.timeout(90000) });  // 90s — clustering can be slow
+            console.log('[Route] Status:', res.status, res.ok);
+            if (!res.ok) {
+                console.warn('[Route] Bad status:', res.status);
+                return null;
+            }
             const data = await res.json();
+            console.log('[Route] Response type:', typeof data, Array.isArray(data),
+                data && typeof data === 'object' ? Object.keys(data) : '');
             // New format: { route, timeline, battery, time }
-            if (data && Array.isArray(data.route)) return data;
+            if (data && Array.isArray(data.route)) {
+                console.log('[Route] New format, blocks:', data.route.length);
+                return data;
+            }
             // Old format fallback: plain array
-            if (Array.isArray(data)) return { route: data, timeline: [], battery: null, time: null };
+            if (Array.isArray(data)) {
+                console.log('[Route] Old format, blocks:', data.length);
+                return { route: data, timeline: [], battery: null, time: null };
+            }
+            console.warn('[Route] Unknown format:', data);
             return null;
         } catch (e) {
-            console.warn('Backend route fetch failed:', e.message);
+            console.warn('[Route] Fetch failed:', e.message);
             return null;
         }
     },
@@ -185,16 +201,12 @@ export const useStore = create((set, get) => ({
             const waypoints = expandBackendRoute(data.route, data.timeline || [], s.map);
             if (waypoints.length > 0) {
                 const mineCount = waypoints.filter(w => w.action === 'mine').length;
-                // Set time limit to cover the full route + 20% buffer
-                // 1 tick = 0.5 mars hour, so ticks * 0.5 = hours
-                const neededHours = Math.ceil((waypoints.length * 0.5) * 1.2);
                 set({
                     route:           waypoints,
                     routeIdx:        0,
                     plannedMinerals: [],
                     routeSource:     'backend',
                     backendTimeline: data.timeline || [],
-                    totalTimeHours:  Math.max(neededHours, 48),
                 });
                 get()._addLog('PLAN', `[OK] Backend: ${waypoints.length} lepes, ${mineCount} banyaszat (Go/Mining)`);
                 return;
@@ -248,9 +260,8 @@ export const useStore = create((set, get) => ({
     simulationTick: () => {
         const s = get();
 
-        // Only enforce time limit for local A* routes
-        // Backend routes run until completion (route done or battery dead)
-        if (s.routeSource !== 'backend' && s.tick >= s.totalTimeHours * 2) {
+        // Enforce time limit for all routes
+        if (s.tick >= s.totalTimeHours * 2) {
             get()._addLog('END', 'Idokeret lejart!');
             get().stopSimulation();
             set({ isFinished: true, finishReason: 'timeout' });
@@ -341,7 +352,9 @@ export const useStore = create((set, get) => ({
         }
 
         set({
-            tick: s.tick + 1, roverX: x, roverY: y,
+            tick: s.tick + 1,
+            prevRoverX: s.roverX, prevRoverY: s.roverY,
+            roverX: x, roverY: y,
             battery: bat, totalDistance: dist,
             inventory: inv, routeIdx: idx,
             collectedSet: collected,
@@ -377,10 +390,28 @@ export const useStore = create((set, get) => ({
 
     pauseSimulation: () => { get().stopSimulation(); get()._addLog('PAUSE', 'Szunetelve'); },
 
-    resetSimulation: () => {
+    resetSimulation: async () => {
         const s = get();
         if (s._intervalId) clearInterval(s._intervalId);
+        // Reset to initial local state first (instant UI feedback)
         set(createInitialState());
+        // Then reload map from backend (resets mined minerals server-side)
+        try {
+            const res = await fetch(`${BACKEND_URL}/map/reset`,
+                { signal: AbortSignal.timeout(5000) });
+            if (res.ok) {
+                const apiData = await res.json();
+                if (apiData.map && apiData.rows && apiData.cols) {
+                    const { map, startX, startY } = parseApiMap(apiData);
+                    const minerals = findMinerals(map);
+                    set({ map, startX, startY, roverX: startX, roverY: startY, minerals });
+                    console.log('[Reset] Map reloaded from backend.');
+                }
+            }
+        } catch (e) {
+            // Fallback: local map already set by createInitialState
+            console.warn('[Reset] Backend reset failed, using local map:', e.message);
+        }
     },
 
     setSimSpeed: (speed) => {
