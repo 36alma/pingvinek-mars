@@ -1,4 +1,4 @@
-﻿from typing import Any
+from typing import Any
 from fastapi import APIRouter
 from fastapi import HTTPException
 from schemas.JSON.rover import Rover
@@ -182,7 +182,9 @@ class Rover_Router():
                     "route": route_json,
                     "timeline": execution_timeline,
                     "battery": rover_service.rover.battery,
+                    "day": rover_service.rover.day,
                     "time": rover_service.rover.time,
+                    "totalHours": rover_service.rover.day * 24 + rover_service.rover.time,
                 }
             finally:
                 self.used = False
