@@ -142,11 +142,22 @@ Ha a backend hibát ad vissza, érdemes egységes hibaválasz-struktúrát haszn
 
 ## Gyors összefoglaló
 
-- **Endpoint:** `GET /map/`
-- **Válasz tartalma:** teljes map + méret (`rows`, `cols`)
-- **Kulcs formátum:** `"x,y"`
-- **Cellaérték típusa:** `string`
 - **Indexelés:** 0-tól induló `x` (oszlop) és `y` (sor)
+
+## GET /map/reset
+
+### Cél
+
+Visszaállítja a térképet az eredeti CSV állapotba. Ez hasznos lehet, ha a rover bányászott, és szeretnénk újrakezdeni a szimulációt tiszta térképpel.
+
+### Endpoint
+
+**HTTP metódus:** `GET`  
+**URL:** `http://{backend_ip}:{backend_port}/map/reset`
+
+### Válasz
+
+Megegyezik a `GET /map/` válaszával: a teljes, frissített (vörösre állított) térképet adja vissza JSON formátumban.
 
 ## Verziózás / bővítés (ajánlás)
 

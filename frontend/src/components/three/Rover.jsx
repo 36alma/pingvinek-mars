@@ -97,10 +97,6 @@ export default function Rover() {
         }
 
         // ── Position interpolation ────────────────────────
-        // Diagonal steps (dx=±1, dz=±1) cover sqrt(2) ≈ 1.414 world units
-        // Cardinal steps cover 1 world unit — same tick duration either way
-        // t goes 0→1 in tickSec regardless of step distance, so interpolation
-        // automatically moves faster for diagonal steps visually ✓
         const tickSec = (400 / Math.max(simSpeed, 1)) / 1000;
         progressRef.current = Math.min(1, progressRef.current + delta / tickSec);
         const t = progressRef.current;
