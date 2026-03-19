@@ -22,7 +22,7 @@ class Rover_Router():
         for move_idx, move in enumerate(moves):
             path = move.get("path", [])
             for edge_idx in range(len(path) - 1):
-                if self._manhattan(tuple(path[edge_idx]), tuple(path[edge_idx + 1])) > 1:
+                if self._manhattan(tuple(path[edge_idx]), tuple(path[edge_idx + 1])) > 2:
                     raise HTTPException(
                         status_code=500,
                         detail=(

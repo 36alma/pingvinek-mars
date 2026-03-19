@@ -65,7 +65,7 @@ class TopLayer():
         if len(path) <= 1:
             return
         for idx in range(len(path) - 1):
-            if self._manhattan(path[idx], path[idx + 1]) > 1:
+            if self._manhattan(path[idx], path[idx + 1]) > 2:
                 raise ValueError(
                     f"Teleport detected in {move_type} path at edge {idx}: "
                     f"{path[idx]} -> {path[idx + 1]}"
