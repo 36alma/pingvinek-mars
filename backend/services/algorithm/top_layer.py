@@ -647,6 +647,12 @@ class TopLayer():
         home = self.map_service.where_is_start()
         if home is not None and (sim_rover.x != home.x or sim_rover.y != home.y):
             return False
+            
+        # Final time check
+        if self.max_mission_ticks is not None:
+            if self._elapsed_mission_ticks(sim_rover) > self.max_mission_ticks:
+                return False
+
         return min_battery >= MIN_BATTERY_RESERVE
 
 
