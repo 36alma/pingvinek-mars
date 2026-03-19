@@ -59,28 +59,44 @@ function ResultModal({ reason, inventory, distance, onClose }) {
 }
 
 // ── Planning Modal ────────────────────────────────────
-function PlanningModal({ isPlanning, isReady, onStart, onClose }) {
+function PlanningModal({ isPlanning, isError, elapsed, onStart, onClose }) {
     return (
         <div className="modal-overlay" onClick={!isPlanning ? onClose : undefined}>
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-icon">
                     {isPlanning ? (
                         <div className="spinner" />
+                    ) : isError ? (
+                        <span style={{ fontSize: 40 }}>⚠️</span>
                     ) : (
                         <span className="modal-check">✓</span>
                     )}
                 </div>
-                <h2 className="modal-title">
-                    {isPlanning ? 'Útvonal tervezése...' : 'Útvonal kész!'}
+                <h2 className="modal-title" style={ isError ? { color: '#ff1744' } : {} }>
+                    {isPlanning ? 'Útvonal tervezése...'
+                     : isError  ? 'Nem sikerült az útvonal'
+                     :            'Útvonal kész!'}
                 </h2>
                 <p className="modal-desc">
                     {isPlanning
-                        ? 'Az algoritmus kiszámolja az optimális útvonalat. Ez eltarthat néhány másodpercig.'
+                        ? `A backend BFS + clustering algoritmusa számítja az optimális útvonalat. Ez eltarthat 30-60 másodpercig.`
+                        : isError
+                        ? 'A backend nem adott vissza érvényes útvonalat. Ellenőrizd hogy a szerver fut-e, majd próbáld újra.'
                         : 'Az útvonal sikeresen megtervezve. A rover készen áll az indulásra.'}
                 </p>
-                {!isPlanning && (
+                {isPlanning && elapsed > 0 && (
+                    <p style={{ fontSize: 11, color: '#555', margin: 0 }}>
+                        Eltelt idő: {elapsed}s / max 90s
+                    </p>
+                )}
+                {!isPlanning && !isError && (
                     <button className="btn btn-go modal-btn" onClick={onStart}>
                         ▶ Indulás
+                    </button>
+                )}
+                {!isPlanning && isError && (
+                    <button className="btn btn-accent modal-btn" onClick={onClose}>
+                        Bezárás
                     </button>
                 )}
                 {isPlanning && (
@@ -95,22 +111,27 @@ function PlanningModal({ isPlanning, isReady, onStart, onClose }) {
 
 // ── Main component ────────────────────────────────────
 export default function SimControls() {
-    const isRunning    = useStore((s) => s.isRunning);
-    const isFinished   = useStore((s) => s.isFinished);
-    const finishReason = useStore((s) => s.finishReason);
-    const inventory    = useStore((s) => s.inventory);
-    const distance     = useStore((s) => s.totalDistance);
-    const simSpeed     = useStore((s) => s.simSpeed);
-    const route        = useStore((s) => s.route);
-    const start        = useStore((s) => s.startSimulation);
-    const pause        = useStore((s) => s.pauseSimulation);
-    const reset        = useStore((s) => s.resetSimulation);
-    const setSpeed     = useStore((s) => s.setSimSpeed);
-    const genRoute     = useStore((s) => s.generateRoute);
+    const isRunning      = useStore((s) => s.isRunning);
+    const isFinished     = useStore((s) => s.isFinished);
+    const finishReason   = useStore((s) => s.finishReason);
+    const inventory      = useStore((s) => s.inventory);
+    const distance       = useStore((s) => s.totalDistance);
+    const simSpeed       = useStore((s) => s.simSpeed);
+    const totalTimeHours = useStore((s) => s.totalTimeHours);
+    const route          = useStore((s) => s.route);
+    const start          = useStore((s) => s.startSimulation);
+    const pause          = useStore((s) => s.pauseSimulation);
+    const reset          = useStore((s) => s.resetSimulation);
+    const setSpeed       = useStore((s) => s.setSimSpeed);
+    const setTime        = useStore((s) => s.setTotalTime);
+    const genRoute       = useStore((s) => s.generateRoute);
 
+    const [timeVal, setTimeVal] = useState(48);
     const [showModal, setShowModal]     = useState(false);
     const [isPlanning, setIsPlanning]   = useState(false);
     const [routeReady, setRouteReady]   = useState(false);
+    const [routeError, setRouteError]   = useState(false);
+    const [planElapsed, setPlanElapsed] = useState(0);
     const [showResult, setShowResult]   = useState(false);
     const resetPending = useRef(false);
 
@@ -131,9 +152,21 @@ export default function SimControls() {
         setShowModal(true);
         setIsPlanning(true);
         setRouteReady(false);
+        setRouteError(false);
+        const planStart = Date.now();
+        const elapsedInterval = setInterval(() => {
+            setPlanElapsed(Math.floor((Date.now() - planStart) / 1000));
+        }, 1000);
         await genRoute();
+        clearInterval(elapsedInterval);
         setIsPlanning(false);
-        setRouteReady(true);
+        // Check if route was actually loaded
+        const currentRoute = useStore.getState().route;
+        if (!currentRoute || currentRoute.length === 0) {
+            setRouteError(true);
+        } else {
+            setRouteReady(true);
+        }
     };
 
     const handleModalStart = () => {
@@ -145,14 +178,14 @@ export default function SimControls() {
         setShowModal(false);
     };
 
-    const handleReset = () => {
-        resetPending.current = true;   // block useEffect from re-opening modal
+    const handleReset = async () => {
+        resetPending.current = true;
         setShowModal(false);
         setShowResult(false);
         setIsPlanning(false);
         setRouteReady(false);
-        reset();                        // store: isFinished → false
-        // Clear guard after React has re-rendered with the new store state
+        setRouteError(false);
+        await reset();   // async: resets store + reloads backend map
         setTimeout(() => { resetPending.current = false; }, 100);
     };
 
@@ -172,7 +205,8 @@ export default function SimControls() {
             {showModal && (
                 <PlanningModal
                     isPlanning={isPlanning}
-                    isReady={routeReady}
+                    isError={routeError}
+                    elapsed={planElapsed}
                     onStart={handleModalStart}
                     onClose={handleModalClose}
                 />
@@ -180,6 +214,23 @@ export default function SimControls() {
 
             <div className="widget controls-widget">
                 <h3><span className="widget-icon">🎮</span> Szimuláció vezérlés</h3>
+
+                <div className="ctrl-group">
+                    <label>Időkeret (óra, min. 24)</label>
+                    <input
+                        type="number"
+                        className="ctrl-input"
+                        value={timeVal}
+                        min={24}
+                        max={240}
+                        disabled={isRunning}
+                        onChange={(e) => {
+                            const v = Math.max(24, +e.target.value || 24);
+                            setTimeVal(v);
+                            setTime(v);
+                        }}
+                    />
+                </div>
 
                 <div className="ctrl-buttons">
                     {!isRunning ? (
@@ -193,6 +244,7 @@ export default function SimControls() {
                     ) : (
                         <button className="btn btn-warn" onClick={pause}>⏸ Szünet</button>
                     )}
+                    <button className="btn btn-danger" onClick={handleReset}>↺ Reset</button>
                 </div>
 
                 <div className="ctrl-group">
