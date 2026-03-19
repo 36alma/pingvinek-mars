@@ -3,7 +3,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.v1.map_router import app as map_router
 from api.v1.rover_router import app as rover_router
-from schemas.JSON.rover import Rover
 
 app = FastAPI(
     title="Pingvinek Mars API",

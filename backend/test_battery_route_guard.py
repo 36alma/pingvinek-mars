@@ -24,6 +24,13 @@ class BatteryRouteGuardTests(unittest.TestCase):
         rover.time = 0
         return rover
 
+    @staticmethod
+    def _make_ores(count: int, x_offset: int = 1) -> dict[Cors, BlueOreMapBlock]:
+        return {
+            Cors(x=x_offset + i, y=1): BlueOreMapBlock()
+            for i in range(count)
+        }
+
     def test_add_path_rejects_route_that_ends_below_reserve(self) -> None:
         rover = self._make_rover(battery=MIN_BATTERY_RESERVE + 1)
         top_layer = TopLayer(rover=rover)
@@ -59,6 +66,64 @@ class BatteryRouteGuardTests(unittest.TestCase):
             cluster = Cluster(rover=rover, ores=ores)
 
         self.assertEqual(cluster.cluster_value, float("-inf"))
+
+    def test_cluster_score_prefers_near_cluster_even_if_far_has_more_ore(self) -> None:
+        rover = self._make_rover(battery=250)
+        rover.time = 0
+
+        near_ores = self._make_ores(count=3, x_offset=1)
+        far_ores = self._make_ores(count=12, x_offset=20)
+
+        with patch.object(
+            Cluster,
+            "internal_distance_calc",
+            return_value=ClusterMine(route=[], collected=[]),
+        ), patch.object(
+            Cluster,
+            "internal_distance",
+            return_value=1,
+        ), patch.object(
+            Cluster,
+            "distance_to_home",
+            return_value=[],
+        ):
+            with patch.object(Cluster, "_len_clustertostart", return_value=3):
+                near_cluster = Cluster(rover=rover, ores=near_ores)
+            with patch.object(Cluster, "_len_clustertostart", return_value=20):
+                far_cluster = Cluster(rover=rover, ores=far_ores)
+
+        self.assertGreater(near_cluster.cluster_value, far_cluster.cluster_value)
+
+    def test_cluster_score_penalizes_long_elapsed_time(self) -> None:
+        rover = self._make_rover(battery=350)
+        rover.time = 0
+
+        short_time_ores = self._make_ores(count=5, x_offset=1)
+        long_time_ores = self._make_ores(count=6, x_offset=1)
+
+        with patch.object(
+            Cluster,
+            "internal_distance_calc",
+            return_value=ClusterMine(route=[], collected=[]),
+        ), patch.object(
+            Cluster,
+            "distance_to_home",
+            return_value=[],
+        ):
+            with patch.object(Cluster, "_len_clustertostart", return_value=3), patch.object(
+                Cluster,
+                "internal_distance",
+                return_value=1,
+            ):
+                short_time_cluster = Cluster(rover=rover, ores=short_time_ores)
+            with patch.object(Cluster, "_len_clustertostart", return_value=3), patch.object(
+                Cluster,
+                "internal_distance",
+                return_value=15,
+            ):
+                long_time_cluster = Cluster(rover=rover, ores=long_time_ores)
+
+        self.assertGreater(short_time_cluster.cluster_value, long_time_cluster.cluster_value)
 
     def test_cluster_internal_travel_is_executed_as_go_moves(self) -> None:
         rover = self._make_rover(battery=100)
