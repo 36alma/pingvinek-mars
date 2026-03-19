@@ -100,12 +100,30 @@ class Cluster():
             risk_penalty += 5000
 
         # --- Végső score ---
+        # Time-efficiency driven ore value:
+        # - close clusters get a higher proximity factor
+        # - long total_time reduces ore value directly
+        proximity_scale = 12.0
+        proximity_factor = proximity_scale / (proximity_scale + max(0, dist_go))
+        ore_reward = (
+            180.0
+            * ore_count
+            * proximity_factor
+            / (1.0 + 0.20 * total_time)
+        )
+
+        # Nonlinear approach penalty to discourage very distant clusters.
+        approach_distance_penalty = 0.65 * (dist_go ** 2)
+
+        # Strong elapsed-time pressure: keep routes short in total execution time.
+        time_penalty = (11.0 * total_time) + (0.35 * (total_time ** 2))
         score = (
-            120 * ore_count
-            - 3 * total_net_energy
-            - 4 * total_time
-            - 2 * total_dist
-            - 3 * dist_inside
+            ore_reward
+            - 2.5 * total_net_energy
+            - time_penalty
+            - 2.5 * total_dist
+            - 3.5 * dist_inside
+            - approach_distance_penalty
             - risk_penalty
         )
         return score
