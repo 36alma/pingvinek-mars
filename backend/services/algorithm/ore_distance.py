@@ -18,7 +18,7 @@ class OreDistanceService():
         parent: dict[str, str] = {start_key: ""}
         visited: set[str] = {start_key}
 
-        # 4 irányú mozgás (fel, le, balra, jobbra)
+        # 8 irányú mozgás (fel, le, balra, jobbra)
         directions = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]  
 
         found = False
