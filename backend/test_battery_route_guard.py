@@ -198,6 +198,27 @@ class BatteryRouteGuardTests(unittest.TestCase):
 
         self.assertEqual(speed_plan, [MoveType.SLOW, MoveType.SLOW])
 
+    def test_speed_plan_respects_mission_time_budget(self) -> None:
+        rover = self._make_rover(battery=100)
+        top_layer = TopLayer(rover=rover, max_mission_ticks=1)
+
+        speed_plan = top_layer._build_speed_plan(
+            [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)],
+            top_layer._clone_rover(rover),
+            require_home_reachability=False,
+            final_required_reserve=10,
+        )
+
+        self.assertIsNone(speed_plan)
+
+    def test_simulate_move_rejects_when_no_mission_time_left(self) -> None:
+        rover = self._make_rover(battery=100)
+        top_layer = TopLayer(rover=rover, max_mission_ticks=0)
+
+        can_move = top_layer._simulate_move(top_layer._clone_rover(rover), MoveType.SLOW)
+
+        self.assertFalse(can_move)
+
     def test_router_keeps_continuous_path_and_adds_timeline_path(self) -> None:
         move = GoMove(
             path=[(0, 0), (0, 1), (0, 2), (0, 3), (1, 3), (2, 3)],
