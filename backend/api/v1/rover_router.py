@@ -1,20 +1,17 @@
 from fastapi import APIRouter
 from fastapi import HTTPException
-from schemas.IN.rover import RoverMoveRequest
 from schemas.JSON.rover import Rover
 from schemas.JSON.rover_move_type import MoveType
 from schemas.JSON.move import speed_to_steps
 from services.routing.rover import RoverService
-from services.algorithm.ore_distance import OreDistanceService
-from schemas.JSON.map_block import WallMapBlock
 from services.map.map import MapService
-import random
 app = APIRouter(prefix="/rover", tags=["Rover"])
 
 
 class Rover_Router():
     def __init__(self):
         self._register_api_endpoint()
+        self.used:bool = False
 
     @staticmethod
     def _manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
@@ -153,6 +150,9 @@ class Rover_Router():
 
         @app.get("/route")
         def rover_route():
+            if self.used == True:
+                raise HTTPException(status_code=400, detail="Route already used")
+            self.used = True
             rover_service = RoverService()
             route = rover_service.startrouting()
             route_json = self._serialize_route(route if route else [])
@@ -164,6 +164,7 @@ class Rover_Router():
                     route_json,
                     (start_pos.x, start_pos.y),
                 )
+            self.used = False
             return {
                 "route": route_json,
                 "timeline": execution_timeline,
