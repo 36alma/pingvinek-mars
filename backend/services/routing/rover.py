@@ -28,6 +28,10 @@ class RoverService():
         else:
             raise ValueError(start_pos)
 
+    @staticmethod
+    def _elapsed_ticks(rover: Rover) -> int:
+        return (rover.day * 48) + int(round(rover.time * 2))
+
     def startpost(self) -> Cors:
         if isinstance(self.start_pos, Cors):
             return self.start_pos
@@ -40,7 +44,6 @@ class RoverService():
         if max_tick is not None and max_tick < 0:
             raise ValueError("max_tick must be >= 0")
         excluded_cluster_signatures: set[tuple[tuple[int, int], ...]] = set()
-        last_route = []
         for _ in range(10):
             self._reset_state()
             top_layer = TopLayer(
@@ -49,11 +52,16 @@ class RoverService():
                 max_mission_ticks=max_tick,
             )
             route = top_layer.start()
-            last_route = route if route else []
-            if top_layer.last_route_valid:
-                return last_route
+            candidate_route = route if route else []
+            route_within_time_budget = (
+                max_tick is None
+                or self._elapsed_ticks(self.rover) <= max_tick
+            )
+            if top_layer.last_route_valid and route_within_time_budget:
+                return candidate_route
             if not top_layer.selected_cluster_signatures:
                 break
             excluded_cluster_signatures.add(top_layer.selected_cluster_signatures[0])
-        return last_route
+        self._reset_state()
+        return []
 
