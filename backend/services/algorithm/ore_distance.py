@@ -19,7 +19,7 @@ class OreDistanceService():
         visited: set[str] = {start_key}
 
         # 4 irányú mozgás (fel, le, balra, jobbra)
-        directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+        directions = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]  
 
         found = False
         while queue:
