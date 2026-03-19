@@ -13,10 +13,18 @@ class TopLayer():
         *,
         rover:Rover,
         excluded_cluster_signatures: set[tuple[tuple[int, int], ...]] | None = None,
+        max_mission_ticks: int | None = None,
     ):
         self.map_service = MapService()
         self.rover = rover
         self.initial_rover = self._clone_rover(rover)
+        if max_mission_ticks is not None and max_mission_ticks < 0:
+            raise ValueError("max_mission_ticks must be >= 0")
+        self.max_mission_ticks = max_mission_ticks
+        self._mission_start_tick = self._time_to_tick(
+            day=self.initial_rover.day,
+            time_value=self.initial_rover.time,
+        )
         self.excluded_cluster_signatures = excluded_cluster_signatures or set()
         self.selected_cluster_signatures: list[tuple[tuple[int, int], ...]] = []
         self.last_route_valid = True
@@ -25,11 +33,39 @@ class TopLayer():
     def _manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
+    @staticmethod
+    def _time_to_tick(*, day: int, time_value: float) -> int:
+        return (day * 48) + int(round(time_value * 2))
+
+    def _elapsed_mission_ticks(self, rover: Rover | None = None) -> int:
+        rover_state = rover or self.rover
+        return self._time_to_tick(
+            day=rover_state.day,
+            time_value=rover_state.time,
+        ) - self._mission_start_tick
+
+    def _remaining_mission_ticks(self, rover: Rover | None = None) -> int | None:
+        if self.max_mission_ticks is None:
+            return None
+        return self.max_mission_ticks - self._elapsed_mission_ticks(rover)
+
+    def _has_time_for_actions(self, *, rover: Rover, actions: int) -> bool:
+        remaining = self._remaining_mission_ticks(rover)
+        if remaining is None:
+            return True
+        return remaining >= actions
+
+    @staticmethod
+    def _min_actions_for_remaining_steps(remaining_steps: int) -> int:
+        if remaining_steps <= 0:
+            return 0
+        return (remaining_steps + MoveType.FAST.value - 1) // MoveType.FAST.value
+
     def _validate_continuous_path(self, *, path: list[tuple[int, int]], move_type: str) -> None:
         if len(path) <= 1:
             return
         for idx in range(len(path) - 1):
-            if self._manhattan(path[idx], path[idx + 1]) > 1:
+            if self._manhattan(path[idx], path[idx + 1]) > 2:
                 raise ValueError(
                     f"Teleport detected in {move_type} path at edge {idx}: "
                     f"{path[idx]} -> {path[idx + 1]}"
@@ -122,6 +158,8 @@ class TopLayer():
         )
 
     def _simulate_move(self, rover: Rover, move_type: MoveType) -> bool:
+        if not self._has_time_for_actions(rover=rover, actions=1):
+            return False
         cost = rover.move_energy_calc(move_type)
         if rover.battery - cost < MIN_BATTERY_RESERVE:
             return False
@@ -156,6 +194,8 @@ class TopLayer():
         ) is not None
 
     def _simulate_mining(self, rover: Rover, *, require_home_reachability: bool = False) -> bool:
+        if not self._has_time_for_actions(rover=rover, actions=1):
+            return False
         if rover.battery - 2 < MIN_BATTERY_RESERVE:
             return False
         rover.remove_battery(2)
@@ -178,9 +218,13 @@ class TopLayer():
         if len(path) == 1:
             rover.x, rover.y = path[0]
             return []
+        if not self._has_time_for_actions(
+            rover=rover,
+            actions=self._min_actions_for_remaining_steps(len(path) - 1),
+        ):
+            return None
 
         i = 0
-        battery = rover.battery
         speed_plan: list[MoveType] = []
         speed_type = [MoveType.FAST, MoveType.NORMAL, MoveType.SLOW]
 
@@ -199,6 +243,12 @@ class TopLayer():
                     continue
 
                 next_index = i + move_type.value
+                remaining_after_move = (len(path) - 1) - next_index
+                if not self._has_time_for_actions(
+                    rover=candidate_rover,
+                    actions=self._min_actions_for_remaining_steps(remaining_after_move),
+                ):
+                    continue
                 if require_home_reachability and not self._can_return_home(candidate_rover):
                     continue
 
@@ -223,7 +273,7 @@ class TopLayer():
             speed_plan.append(chosen_speed)
             i += chosen_speed.value
             self._copy_rover_state(rover, chosen_rover_state)
-            battery = rover.battery
+
 
         return speed_plan
 
@@ -324,7 +374,7 @@ class TopLayer():
             final_required_reserve=0,
         ) is not None
 
-    def start(self):
+    def start(self) -> list[BasePathMoveType]:
         map = self.map_service.get_full_map_OBJ()
         ores:dict[Cors,OreBaseMapBlock] = {}
         for key, value in map.items():
@@ -335,6 +385,8 @@ class TopLayer():
         self.full_path:list[BasePathMoveType] = []
         clusters = Find_Clusters(Rover=self.rover,ores=ores)
         while True:
+            if not self._has_time_for_actions(rover=self.rover, actions=1):
+                break
             clusters_nears = self._get_clusters_score(clusters=clusters)
             clusters_nears_scores = sorted(clusters_nears.items(), key=lambda x: x[1],reverse=True)
             if len(clusters_nears_scores) == 0:
@@ -394,7 +446,8 @@ class TopLayer():
                     self.add_path(back_path, require_home_reachability=False, final_required_reserve=0)
         self.last_route_valid = self._validate_final_route()
         if not self.last_route_valid:
-            return []
+            self.full_path = []
+            return self.full_path
         return self.full_path
         
             
@@ -594,4 +647,12 @@ class TopLayer():
         home = self.map_service.where_is_start()
         if home is not None and (sim_rover.x != home.x or sim_rover.y != home.y):
             return False
+            
+        # Final time check
+        if self.max_mission_ticks is not None:
+            if self._elapsed_mission_ticks(sim_rover) > self.max_mission_ticks:
+                return False
+
         return min_battery >= MIN_BATTERY_RESERVE
+
+

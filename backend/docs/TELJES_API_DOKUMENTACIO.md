@@ -1,6 +1,6 @@
 # Pingvinek Mars - Teljes API Dokumentacio
 
-Frissitve: `2026-03-17`
+Frissitve: `2026-03-19`
 Backend verzio: `1.0.0`
 Backend alap URL (lokalis default): `http://localhost:5000`
 
@@ -36,8 +36,9 @@ Megjegyzes:
 | Metodus | Path | Allapot | Megjegyzes |
 |---|---|---|---|
 | GET | `/map/` | mukodik | terkeppontok + meret |
-| GET | `/rover/start_position` | hibas | jelenleg 500-as hibara fut |
-| GET | `/rover/route` | mukodik | teljes rover kuldetesi terv + timeline |
+| GET | `/map/reset` | mukodik | terkep alaphelyzetbe allitasa |
+| GET | `/rover/start_position` | mukodik | start pozicio |
+| GET | `/rover/route` | mukodik | teljes rover kuldetesi terv + timeline + allapot |
 | GET | `/openapi.json` | mukodik | OpenAPI schema JSON |
 | GET | `/docs` | mukodik | Swagger UI |
 redirect |
@@ -120,35 +121,52 @@ Minta statisztika a jelenlegi map.csv alapjan:
 
 - `500 Internal Server Error`: map betoltesi vagy belso feldolgozasi hiba eseten.
 
+## 4.8 GET /map/reset
+
+### 4.8.1 Cel
+
+Visszaallitja a terkeppet az eredeti CSV allapotba (banyaszott asvanyok visszakerulnek).
+
+### 4.8.2 Request
+
+- Method: `GET`
+- URL: `/map/reset`
+- Query param: nincs
+- Body: nincs
+
+### 4.8.3 Response schema
+
+Megegyezik a `GET /map/` kettos (teljes map objektum).
+
+### 4.8.4 Valos, ellenorzott viselkedes
+
+A `MapService().reset_map()` hivas utan ugyanazt adja vissza, mint a `/map/`. Mukodik.
+
 ## 5. GET /rover/start_position
 
 ### 5.1 Cel
 
-Elmeletileg a start poziciot adna vissza.
+Visszaadja a rover kezdo koordinatait.
 
-### 5.2 Aktualis allapot (fontos)
+### 5.2 Request
 
-Ez az endpoint jelenleg kodhiba miatt nem mukodik.
+- Method: `GET`
+- URL: `/rover/start_position`
+- Query param: nincs
+- Body: nincs
 
-Ok:
+### 5.3 Response schema
 
-- A route `RoverService().startpost()` metodust hiv.
-- A `RoverService` osztalyban ilyen publikus metodus nincs.
-- Levo metodus: `_startpost()`.
+```json
+{
+  "x": 34,
+  "y": 32
+}
+```
 
-Varhato aktualis eredmeny:
+### 5.4 Valos, ellenorzott viselkedes
 
-- `500 Internal Server Error`
-- Python `AttributeError`
-
-### 5.3 Javasolt javitas (backend)
-
-- Vagy route oldalon `startpost()` helyett megfelelo publikus metodus meghivasa.
-- Vagy a service-ben publikus `startpost()` metodus bevezetese.
-
-### 5.4 Megjegyzes
-
-Mivel az endpoint hibas, a valos, stabil response schema jelenleg nem tekintheto fixnek.
+A `RoverService().startpost()` metodust hivja, ami a terkepen az `S` karakter koordinatait adja vissza. Mukodik.
 
 ## 6. GET /rover/route
 
@@ -165,7 +183,7 @@ Teljes kuldetesi utvonalat general a rovernek:
 
 - Method: `GET`
 - URL: `/rover/route`
-- Query param: nincs
+- Query param: `max_time` (float, opcionalis) - Maximalis engedelyezett ido (ora, 0.5-os lepesekben).
 - Body: nincs
 
 ### 6.3 Response (aktualis schema)
@@ -190,7 +208,7 @@ Teljes kuldetesi utvonalat general a rovernek:
       "type": "Go",
       "speed": "NORMAL",
       "position": [34, 34],
-      "battery": 100,
+      "battery": 92.0,
       "time": {
         "sol": 0,
         "hour": 0,
@@ -200,8 +218,10 @@ Teljes kuldetesi utvonalat general a rovernek:
       }
     }
   ],
-  "battery": 100,
-  "time": 0
+  "battery": 100.0,
+  "day": 0,
+  "time": 0.5,
+  "totalHours": 0.5
 }
 ```
 
@@ -211,8 +231,10 @@ Teljes kuldetesi utvonalat general a rovernek:
 |---|---|---|
 | `route` | `array` | Szekvencialis mozgas + banyaszat blokkok |
 | `timeline` | `array` | Lepesszintu szimulacios allapotlista |
-| `battery` | `number` | Rover battery ertek a route generalo objektumban |
-| `time` | `number` | Rover ido (ora, 0.5 oras lepesekben) a route generalo objektumban |
+| `battery` | `number` | Rover battery ertek a kuldetes vegen |
+| `day` | `int` | Rover napja a kuldetes vegen |
+| `time` | `number` | Rover oraja a kuldetes vegen |
+| `totalHours` | `number` | Osszesitett ora a kuldetes vegen |
 
 ### 6.5 `route` elem tipusok
 
@@ -374,11 +396,12 @@ Reszben elavult route forma:
 # map
 curl http://localhost:5000/map/
 
-# start position (jelenleg varhatoan 500)
+# start position
 curl http://localhost:5000/rover/start_position
 
 # full route
 curl http://localhost:5000/rover/route
+curl "http://localhost:5000/rover/route?max_time=12.5"
 
 # swagger
 curl http://localhost:5000/openapi.json

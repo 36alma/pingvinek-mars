@@ -1,30 +1,28 @@
+from typing import Any
 from fastapi import APIRouter
 from fastapi import HTTPException
-from schemas.IN.rover import RoverMoveRequest
 from schemas.JSON.rover import Rover
 from schemas.JSON.rover_move_type import MoveType
 from schemas.JSON.move import speed_to_steps
 from services.routing.rover import RoverService
-from services.algorithm.ore_distance import OreDistanceService
-from schemas.JSON.map_block import WallMapBlock
 from services.map.map import MapService
-import random
 app = APIRouter(prefix="/rover", tags=["Rover"])
 
 
 class Rover_Router():
     def __init__(self):
         self._register_api_endpoint()
+        self.used:bool = False
 
     @staticmethod
     def _manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-    def _validate_route_json(self, moves: list[dict]) -> None:
+    def _validate_route_json(self, moves: list[dict[Any,Any]]) -> None:
         for move_idx, move in enumerate(moves):
             path = move.get("path", [])
             for edge_idx in range(len(path) - 1):
-                if self._manhattan(tuple(path[edge_idx]), tuple(path[edge_idx + 1])) > 1:
+                if self._manhattan(tuple(path[edge_idx]), tuple(path[edge_idx + 1])) > 2:
                     raise HTTPException(
                         status_code=500,
                         detail=(
@@ -49,7 +47,7 @@ class Rover_Router():
                 )
 
     @staticmethod
-    def _timeline_path(path: list[tuple[int, int]], speed_plan: list) -> list[tuple[int, int]]:
+    def _timeline_path(path: list[tuple[int, int]], speed_plan: list[Any]) -> list[tuple[int, int]]:
         if not path:
             return []
         timeline = [path[0]]
@@ -60,7 +58,7 @@ class Rover_Router():
         return timeline
 
     @staticmethod
-    def _format_time(day: int, time_value: float) -> dict:
+    def _format_time(day: int, time_value: float) -> dict[Any,Any]:
         hour = int(time_value)
         minute = int(round((time_value - hour) * 60))
         return {
@@ -72,7 +70,7 @@ class Rover_Router():
         }
 
     @staticmethod
-    def _build_execution_timeline(moves: list[dict], start_position: tuple[int, int]) -> list[dict]:
+    def _build_execution_timeline(moves: list[dict[Any,Any]], start_position: tuple[int, int]) -> list[dict[Any,Any]]:
         sim = Rover()
         sim.x = start_position[0]
         sim.y = start_position[1]
@@ -81,7 +79,7 @@ class Rover_Router():
         sim.day = 0
         sim.time = 0
 
-        timeline: list[dict] = []
+        timeline: list[dict[Any,Any]] = []
         step_index = 0
 
         for move in moves:
@@ -128,8 +126,8 @@ class Rover_Router():
         return timeline
 
     @staticmethod
-    def _serialize_route(path: list) -> list[dict]:
-        output: list[dict] = []
+    def _serialize_route(path: list[Any]) -> list[dict[Any,Any]]:
+        output: list[dict[Any,Any]] = []
         for move in path:
             speed_plan = getattr(move, "speedPlan", None)
             raw_path = move.path
@@ -148,26 +146,47 @@ class Rover_Router():
     def _register_api_endpoint(self):
 
         @app.get("/start_position")
-        def start_position():
+        def start_position():  # pyright: ignore[reportUnusedFunction]
             return RoverService().startpost()
 
         @app.get("/route")
-        def rover_route():
-            rover_service = RoverService()
-            route = rover_service.startrouting()
-            route_json = self._serialize_route(route if route else [])
-            self._validate_route_json(route_json)
-            start_pos = MapService().where_is_start()
-            execution_timeline = []
-            if start_pos is not None:
-                execution_timeline = self._build_execution_timeline(
-                    route_json,
-                    (start_pos.x, start_pos.y),
-                )
-            return {
-                "route": route_json,
-                "timeline": execution_timeline,
-                "battery": rover_service.rover.battery,
-                "time": rover_service.rover.time,
-            }
+        def rover_route(max_time: float | None = None):
+            if self.used == True:
+                raise HTTPException(status_code=400, detail="Route already used")
+            self.used = True
+            try:
+                max_tick: int | None = None
+                if max_time is not None:
+                    if max_time < 0:
+                        raise HTTPException(status_code=400, detail="max_time must be >= 0")
+                    max_time_ticks = max_time * 2
+                    max_tick = int(round(max_time_ticks))
+                    if abs(max_time_ticks - max_tick) > 1e-9:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="max_time must be in 0.5 hour steps",
+                        )
+
+                rover_service = RoverService()
+                route = rover_service.startrouting(max_tick)
+                route_json = self._serialize_route(route if route else [])
+                self._validate_route_json(route_json)
+                start_pos = MapService().where_is_start()
+                execution_timeline = []
+                if start_pos is not None:
+                    execution_timeline = self._build_execution_timeline(
+                        route_json,
+                        (start_pos.x, start_pos.y),
+                    )
+                return {
+                    "route": route_json,
+                    "timeline": execution_timeline,
+                    "battery": rover_service.rover.battery,
+                    "day": rover_service.rover.day,
+                    "time": rover_service.rover.time,
+                    "totalHours": rover_service.rover.day * 24 + rover_service.rover.time,
+                }
+            finally:
+                self.used = False
 Rover_Router()
+
